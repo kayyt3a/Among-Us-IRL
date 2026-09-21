@@ -1,0 +1,304 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0b12;
+  --bg-elevated: #16161f;
+  --bg-card: #1e1e2b;
+  --border: #2c2c3c;
+  --text: #f2f2f7;
+  --text-dim: #9a9aab;
+  --accent: #e0392f;
+  --accent-dim: #8a2620;
+  --crew: #8fd3ff;
+  --good: #3ecf8e;
+  --bad: #e0392f;
+  --warn: #f5b942;
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  border-radius: 14px;
+  padding: 16px 20px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  transition: transform 0.06s ease, opacity 0.15s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: white;
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-sm {
+  padding: 10px 14px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+input.field {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 17px;
+  width: 100%;
+}
+
+input.field:focus {
+  outline: 2px solid var(--accent);
+}
+
+.room-code {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: var(--accent);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.badge-host {
+  background: rgba(224, 57, 47, 0.15);
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+
+.badge-dead {
+  background: rgba(154, 154, 171, 0.15);
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.error-text {
+  color: var(--bad);
+  font-size: 14px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.task-item.done {
+  opacity: 0.5;
+}
+
+.task-room {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.task-check {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+}
+
+.task-check.checked {
+  background: var(--good);
+  border-color: var(--good);
+  color: white;
+}
+
+.role-banner {
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+}
+
+.role-banner.crewmate {
+  background: rgba(143, 211, 255, 0.12);
+  border: 1px solid rgba(143, 211, 255, 0.4);
+  color: var(--crew);
+}
+
+.role-banner.impostor {
+  background: rgba(224, 57, 47, 0.14);
+  border: 1px solid rgba(224, 57, 47, 0.5);
+  color: var(--accent);
+}
+
+.blackout {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #222;
+  font-size: 13px;
+  animation: blackout-fade 0.25s ease;
+}
+
+@keyframes blackout-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.center {
+  text-align: center;
+}
+
+.ghost-overlay {
+  filter: grayscale(1) brightness(0.7);
+}
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 500;
+  max-width: 480px;
+  margin: 0 auto;
+}

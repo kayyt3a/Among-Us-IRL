@@ -1,0 +1,301 @@
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import type { ReactNode } from 'react';
+import type {
+  GameOverInfo,
+  MeetingReason,
+  MeetingResult,
+  PlayerRole,
+  PlayerTask,
+  PrivateGameInfo,
+  RoomStateSummary,
+} from '@irl-impostor/shared';
+import { socket } from '../socket';
+
+const STORAGE_KEY = 'irl-impostor-session';
+
+interface Session {
+  code: string;
+  playerId: string;
+  name: string;
+}
+
+interface State {
+  connected: boolean;
+  connecting: boolean;
+  session: Session | null;
+  room: RoomStateSummary | null;
+  myRole: PlayerRole | null;
+  myTasks: PlayerTask[];
+  fellowImpostors: { id: string; name: string }[];
+  dead: boolean;
+  meetingResult: MeetingResult | null;
+  gameOver: GameOverInfo | null;
+  error: string | null;
+  ventNonce: number;
+  ventDurationMs: number;
+}
+
+type Action =
+  | { type: 'connected'; value: boolean }
+  | { type: 'connecting'; value: boolean }
+  | { type: 'session'; session: Session | null }
+  | { type: 'room_update'; room: RoomStateSummary }
+  | { type: 'room_clear' }
+  | { type: 'game_started'; payload: PrivateGameInfo }
+  | { type: 'task_local_done'; taskId: string }
+  | { type: 'you_died' }
+  | { type: 'vent'; durationMs: number }
+  | { type: 'meeting_result'; result: MeetingResult }
+  | { type: 'clear_meeting_result' }
+  | { type: 'game_over'; info: GameOverInfo }
+  | { type: 'error'; message: string | null }
+  | { type: 'reset_round' };
+
+const initialState: State = {
+  connected: false,
+  connecting: true,
+  session: null,
+  room: null,
+  myRole: null,
+  myTasks: [],
+  fellowImpostors: [],
+  dead: false,
+  meetingResult: null,
+  gameOver: null,
+  error: null,
+  ventNonce: 0,
+  ventDurationMs: 4000,
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'connected':
+      return { ...state, connected: action.value, connecting: false };
+    case 'connecting':
+      return { ...state, connecting: action.value };
+    case 'session':
+      return { ...state, session: action.session };
+    case 'room_update':
+      return { ...state, room: action.room };
+    case 'room_clear':
+      return { ...state, room: null };
+    case 'game_started':
+      return {
+        ...state,
+        myRole: action.payload.role,
+        myTasks: action.payload.tasks,
+        fellowImpostors: action.payload.fellowImpostors ?? [],
+        dead: false,
+        gameOver: null,
+      };
+    case 'task_local_done':
+      return {
+        ...state,
+        myTasks: state.myTasks.map((t) => (t.taskId === action.taskId ? { ...t, done: true } : t)),
+      };
+    case 'you_died':
+      return { ...state, dead: true };
+    case 'vent':
+      return { ...state, ventNonce: state.ventNonce + 1, ventDurationMs: action.durationMs };
+    case 'meeting_result':
+      return { ...state, meetingResult: action.result };
+    case 'clear_meeting_result':
+      return { ...state, meetingResult: null };
+    case 'game_over':
+      return { ...state, gameOver: action.info };
+    case 'error':
+      return { ...state, error: action.message };
+    case 'reset_round':
+      return {
+        ...state,
+        myRole: null,
+        myTasks: [],
+        fellowImpostors: [],
+        dead: false,
+        meetingResult: null,
+        gameOver: null,
+      };
+    default:
+      return state;
+  }
+}
+
+interface GameApi extends State {
+  createRoom: (name: string) => Promise<void>;
+  joinRoom: (code: string, name: string) => Promise<void>;
+  leaveGame: () => void;
+  updateSettings: (partial: { tasksPerPlayer?: number; impostorCount?: number }) => void;
+  startGame: () => void;
+  completeTask: (taskId: string) => void;
+  killPlayer: (targetId: string) => void;
+  triggerVent: () => void;
+  callMeeting: (reason: MeetingReason) => void;
+  castVote: (targetId: string | 'skip') => void;
+  playAgain: () => void;
+  dismissMeetingResult: () => void;
+  dismissError: () => void;
+  isHost: boolean;
+  me: RoomStateSummary['players'][number] | null;
+}
+
+const GameContext = createContext<GameApi | null>(null);
+
+export function GameProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const saved: Session | null = raw ? JSON.parse(raw) : null;
+
+    function onConnect() {
+      dispatch({ type: 'connected', value: true });
+      const current = saved ?? stateRef.current.session;
+      if (current) {
+        socket.emit('rejoin_room', { code: current.code, playerId: current.playerId }, (res) => {
+          if (res.ok) {
+            dispatch({ type: 'session', session: current });
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+            dispatch({ type: 'session', session: null });
+          }
+        });
+      } else {
+        dispatch({ type: 'connecting', value: false });
+      }
+    }
+    function onDisconnect() {
+      dispatch({ type: 'connected', value: false });
+    }
+    function onRoomUpdate(room: RoomStateSummary) {
+      dispatch({ type: 'room_update', room });
+    }
+    function onGameStarted(payload: PrivateGameInfo) {
+      dispatch({ type: 'game_started', payload });
+    }
+    function onTaskAck(payload: { taskId: string }) {
+      dispatch({ type: 'task_local_done', taskId: payload.taskId });
+    }
+    function onYouDied() {
+      dispatch({ type: 'you_died' });
+    }
+    function onVent(payload: { durationMs: number }) {
+      dispatch({ type: 'vent', durationMs: payload.durationMs });
+    }
+    function onMeetingResult(result: MeetingResult) {
+      dispatch({ type: 'meeting_result', result });
+    }
+    function onGameOver(info: GameOverInfo) {
+      dispatch({ type: 'game_over', info });
+    }
+    function onError(payload: { message: string }) {
+      dispatch({ type: 'error', message: payload.message });
+    }
+    function onKillResult(payload: { ok: boolean; message?: string }) {
+      if (!payload.ok && payload.message) dispatch({ type: 'error', message: payload.message });
+    }
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('room_update', onRoomUpdate);
+    socket.on('game_started', onGameStarted);
+    socket.on('task_ack', onTaskAck);
+    socket.on('you_died', onYouDied);
+    socket.on('vent_triggered', onVent);
+    socket.on('meeting_result', onMeetingResult);
+    socket.on('game_over', onGameOver);
+    socket.on('error_message', onError);
+    socket.on('kill_result', onKillResult);
+
+    if (socket.connected) onConnect();
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('room_update', onRoomUpdate);
+      socket.off('game_started', onGameStarted);
+      socket.off('task_ack', onTaskAck);
+      socket.off('you_died', onYouDied);
+      socket.off('vent_triggered', onVent);
+      socket.off('meeting_result', onMeetingResult);
+      socket.off('game_over', onGameOver);
+      socket.off('error_message', onError);
+      socket.off('kill_result', onKillResult);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (state.room?.phase === 'lobby' && (state.myRole || state.gameOver)) {
+      dispatch({ type: 'reset_round' });
+    }
+  }, [state.room?.phase, state.myRole, state.gameOver]);
+
+  const api = useMemo<GameApi>(() => {
+    const me = state.room?.players.find((p) => p.id === state.session?.playerId) ?? null;
+    return {
+      ...state,
+      me,
+      isHost: !!me?.isHost,
+      createRoom: (name: string) =>
+        new Promise<void>((resolve) => {
+          socket.emit('create_room', { name }, (res) => {
+            if (res.ok) {
+              const session = { code: res.code, playerId: res.playerId, name };
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+              dispatch({ type: 'session', session });
+              dispatch({ type: 'error', message: null });
+            } else {
+              dispatch({ type: 'error', message: res.error });
+            }
+            resolve();
+          });
+        }),
+      joinRoom: (code: string, name: string) =>
+        new Promise<void>((resolve) => {
+          socket.emit('join_room', { code: code.toUpperCase(), name }, (res) => {
+            if (res.ok) {
+              const session = { code: res.code, playerId: res.playerId, name };
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+              dispatch({ type: 'session', session });
+              dispatch({ type: 'error', message: null });
+            } else {
+              dispatch({ type: 'error', message: res.error });
+            }
+            resolve();
+          });
+        }),
+      leaveGame: () => {
+        localStorage.removeItem(STORAGE_KEY);
+        dispatch({ type: 'session', session: null });
+        dispatch({ type: 'reset_round' });
+        dispatch({ type: 'room_clear' });
+        socket.disconnect();
+        socket.connect();
+      },
+      updateSettings: (partial) => socket.emit('update_settings', partial),
+      startGame: () => socket.emit('start_game'),
+      completeTask: (taskId: string) => {
+        dispatch({ type: 'task_local_done', taskId });
+        socket.emit('complete_task', { taskId });
+      },
+      killPlayer: (targetId: string) => socket.emit('kill_player', { targetId }),
+      triggerVent: () => socket.emit('trigger_vent'),
+      callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
+      castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),
+      playAgain: () => socket.emit('play_again'),
+      dismissMeetingResult: () => dispatch({ type: 'clear_meeting_result' }),
+      dismissError: () => dispatch({ type: 'error', message: null }),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  return <GameContext.Provider value={api}>{children}</GameContext.Provider>;
+}
+
+export function useGame(): GameApi {
+  const ctx = useContext(GameContext);
+  if (!ctx) throw new Error('useGame must be used within GameProvider');
+  return ctx;
+}

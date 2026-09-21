@@ -1,0 +1,14 @@
+{
+  "name": "IRL Impostor",
+  "short_name": "IRL Impostor",
+  "description": "A real-life social deduction party game, playable in any house with zero setup.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0b12",
+  "theme_color": "#0b0b12",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
