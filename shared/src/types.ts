@@ -95,6 +95,12 @@ export interface ServerToClientEvents {
   task_ack: (payload: { taskId: string }) => void;
   you_died: () => void;
   kill_result: (payload: { ok: boolean; message?: string }) => void;
+  /** Sent only to the killer: start emitting this tone for windowMs. */
+  kill_listen_start: (payload: { frequencyHz: number; windowMs: number }) => void;
+  /** Sent only to the killer: how the attempt resolved. */
+  kill_attempt_result: (payload: { ok: boolean; instant?: boolean; reason?: string }) => void;
+  /** Sent only to the intended target: silently start listening for a matching tone. No UI should react to this. */
+  begin_proximity_scan: (payload: { windowMs: number; candidateFrequencies: number[] }) => void;
   vent_triggered: (payload: { durationMs: number }) => void;
   meeting_called: (payload: MeetingState) => void;
   meeting_phase_changed: (payload: MeetingState) => void;
@@ -119,7 +125,14 @@ export interface ClientToServerEvents {
   update_settings: (payload: Partial<RoomSettings>) => void;
   start_game: () => void;
   complete_task: (payload: { taskId: string }) => void;
+  /** Honor-code instant kill — no proximity check. Used as the fallback when the audio handshake fails or is unavailable. */
   kill_player: (payload: { targetId: string }) => void;
+  /** Starts a proximity-verified kill attempt on a target. */
+  attempt_kill: (payload: { targetId: string }) => void;
+  cancel_kill_attempt: () => void;
+  /** Sent by the target's client when it hears a matching tone. */
+  tone_detected: (payload: { frequencyHz: number }) => void;
+  report_mic_status: (payload: { available: boolean }) => void;
   trigger_vent: () => void;
   call_meeting: (payload: { reason: MeetingReason }) => void;
   cast_vote: (payload: { targetId: string | 'skip' }) => void;

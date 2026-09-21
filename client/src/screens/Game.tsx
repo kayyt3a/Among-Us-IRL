@@ -68,7 +68,11 @@ export default function Game() {
 
       {isImpostor && !game.dead && (
         <div className="row">
-          <button className="btn btn-danger btn-block" onClick={() => setKilling(true)}>
+          <button
+            className="btn btn-danger btn-block"
+            disabled={game.killAttempt.status === 'pending' || game.killAttempt.status === 'listening'}
+            onClick={() => setKilling(true)}
+          >
             Eliminate
           </button>
           <button
@@ -122,7 +126,7 @@ export default function Game() {
                 key={p.id}
                 className="btn btn-danger btn-block"
                 onClick={() => {
-                  game.killPlayer(p.id);
+                  game.attemptKill(p.id, p.name);
                   setKilling(false);
                 }}
               >
@@ -130,6 +134,49 @@ export default function Game() {
               </button>
             ))}
             <button className="btn btn-ghost btn-block" onClick={() => setKilling(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(game.killAttempt.status === 'pending' || game.killAttempt.status === 'listening') && (
+        <div className="toast" style={{ top: 0, bottom: 'auto', position: 'fixed' }}>
+          <div className="stack center">
+            <h3 style={{ margin: 0 }}>Verifying you're close to {game.killAttempt.targetName}…</h3>
+            <p className="subtitle">
+              {game.killAttempt.status === 'listening'
+                ? 'Playing a quiet tone — stay near them and keep this screen open.'
+                : 'Starting…'}
+            </p>
+            <button className="btn btn-ghost btn-block" onClick={game.cancelKillAttempt}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {game.killAttempt.status === 'failed' && (
+        <div className="toast" style={{ top: 0, bottom: 'auto', position: 'fixed' }}>
+          <div className="stack center">
+            <h3 style={{ margin: 0 }}>Couldn't verify {game.killAttempt.targetName}</h3>
+            <p className="subtitle">{game.killAttempt.reason ?? 'Get closer and try again.'}</p>
+            <button
+              className="btn btn-danger btn-block"
+              onClick={() => game.attemptKill(game.killAttempt.targetId!, game.killAttempt.targetName!)}
+            >
+              Try again
+            </button>
+            <button
+              className="btn btn-outline btn-block"
+              onClick={() => {
+                game.killPlayer(game.killAttempt.targetId!);
+                game.cancelKillAttempt();
+              }}
+            >
+              Eliminate anyway (skip check)
+            </button>
+            <button className="btn btn-ghost btn-block" onClick={game.cancelKillAttempt}>
               Cancel
             </button>
           </div>

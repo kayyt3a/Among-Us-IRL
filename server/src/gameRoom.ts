@@ -7,6 +7,8 @@ import {
   MeetingState,
   MeetingVoteTally,
   PlayerTask,
+  PROXIMITY_FREQUENCIES_HZ,
+  PROXIMITY_WINDOW_MS,
   RoomStateSummary,
 } from '@irl-impostor/shared';
 import {
@@ -44,6 +46,7 @@ export class GameRoom {
       ventAvailableUntil: 0,
       meetingTimer: null,
       winner: null,
+      pendingKill: null,
     };
   }
 
@@ -62,6 +65,7 @@ export class GameRoom {
       status: 'alive',
       tasks: [],
       connected: true,
+      micAvailable: true,
     };
     this.state.players.set(id, player);
     this.state.playerOrder.push(id);
@@ -174,11 +178,10 @@ export class GameRoom {
     return true;
   }
 
-  /** Returns the winner, if the kill ends the game. */
-  killPlayer(
+  private validateKill(
     killerId: string,
     targetId: string
-  ): { ok: true; winner: GameOverInfo | null } | { ok: false; error: string } {
+  ): { ok: true } | { ok: false; error: string } {
     const killer = this.state.players.get(killerId);
     const target = this.state.players.get(targetId);
     if (!killer || killer.role !== 'impostor' || killer.status !== 'alive') {
@@ -187,11 +190,97 @@ export class GameRoom {
     if (!target || target.status !== 'alive' || target.role === 'impostor') {
       return { ok: false, error: 'Invalid target.' };
     }
+    return { ok: true };
+  }
+
+  private finalizeKill(targetId: string): GameOverInfo | null {
+    const target = this.state.players.get(targetId)!;
     target.status = 'dead';
     this.state.ventAvailableUntil = Date.now() + VENT_WINDOW_MS;
     this.touch();
-    const winner = this.checkWinConditions();
+    return this.checkWinConditions();
+  }
+
+  /** Honor-code instant kill, no proximity check. Returns the winner, if the kill ends the game. */
+  killPlayer(
+    killerId: string,
+    targetId: string
+  ): { ok: true; winner: GameOverInfo | null } | { ok: false; error: string } {
+    const check = this.validateKill(killerId, targetId);
+    if (!check.ok) return check;
+    const winner = this.finalizeKill(targetId);
     return { ok: true, winner };
+  }
+
+  setMicAvailable(playerId: string, available: boolean) {
+    const player = this.state.players.get(playerId);
+    if (player) player.micAvailable = available;
+  }
+
+  /**
+   * Starts a proximity-verified kill attempt. If the target's client has no
+   * confirmed mic access, there's nothing to verify against, so this falls
+   * straight through to an instant kill instead of hanging forever.
+   */
+  startKillAttempt(
+    killerId: string,
+    targetId: string
+  ):
+    | { ok: true; instant: true; winner: GameOverInfo | null }
+    | { ok: true; instant: false; frequencyHz: number; windowMs: number }
+    | { ok: false; error: string } {
+    const check = this.validateKill(killerId, targetId);
+    if (!check.ok) return check;
+    if (this.state.pendingKill && this.state.pendingKill.expiresAt > Date.now()) {
+      return { ok: false, error: 'A kill attempt is already in progress.' };
+    }
+
+    const target = this.state.players.get(targetId)!;
+    if (!target.micAvailable) {
+      const winner = this.finalizeKill(targetId);
+      return { ok: true, instant: true, winner };
+    }
+
+    const frequencyHz =
+      PROXIMITY_FREQUENCIES_HZ[Math.floor(Math.random() * PROXIMITY_FREQUENCIES_HZ.length)];
+    this.state.pendingKill = {
+      killerId,
+      targetId,
+      frequencyHz,
+      expiresAt: Date.now() + PROXIMITY_WINDOW_MS,
+    };
+    this.touch();
+    return { ok: true, instant: false, frequencyHz, windowMs: PROXIMITY_WINDOW_MS };
+  }
+
+  /** The target's client reports hearing a tone. Confirms the pending kill if it matches. */
+  confirmKillAttempt(
+    reporterId: string,
+    frequencyHz: number
+  ): { ok: true; killerId: string; winner: GameOverInfo | null } | { ok: false } {
+    const pending = this.state.pendingKill;
+    if (
+      !pending ||
+      pending.targetId !== reporterId ||
+      pending.frequencyHz !== frequencyHz ||
+      pending.expiresAt < Date.now()
+    ) {
+      return { ok: false };
+    }
+    const { killerId, targetId } = pending;
+    this.state.pendingKill = null;
+    const winner = this.finalizeKill(targetId);
+    return { ok: true, killerId, winner };
+  }
+
+  /** Clears the pending kill if it's still the given killer's, e.g. on cancel or timeout. Returns whether one was cleared. */
+  clearKillAttempt(killerId: string): boolean {
+    if (this.state.pendingKill && this.state.pendingKill.killerId === killerId) {
+      this.state.pendingKill = null;
+      this.touch();
+      return true;
+    }
+    return false;
   }
 
   isVentAvailable(): boolean {
@@ -348,6 +437,7 @@ export class GameRoom {
     this.state.meeting = null;
     this.state.ventAvailableUntil = 0;
     this.state.winner = null;
+    this.state.pendingKill = null;
     this.touch();
   }
 

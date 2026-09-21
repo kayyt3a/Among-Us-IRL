@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { Server, Socket } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@irl-impostor/shared';
+import { PROXIMITY_FREQUENCIES_HZ } from '@irl-impostor/shared';
 import { GameRoom } from './gameRoom';
 import { generateRoomCode } from './roomCode';
 import { MAX_PLAYERS, ROOM_IDLE_CLEANUP_MS, VENT_DURATION_MS } from './constants';
@@ -36,12 +37,21 @@ interface SocketMeta {
 }
 const socketMeta = new Map<string, SocketMeta>();
 const meetingTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
+const killAttemptTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function clearMeetingTimers(code: string) {
   const timers = meetingTimers.get(code);
   if (timers) {
     timers.forEach(clearTimeout);
     meetingTimers.delete(code);
+  }
+}
+
+function clearKillAttemptTimer(code: string) {
+  const timer = killAttemptTimers.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    killAttemptTimers.delete(code);
   }
 }
 
@@ -227,6 +237,75 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('report_mic_status', ({ available }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    ctx.room.setMicAvailable(ctx.playerId, available);
+  });
+
+  socket.on('attempt_kill', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.startKillAttempt(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('kill_attempt_result', { ok: false, reason: res.error });
+      return;
+    }
+
+    if (res.instant) {
+      socket.emit('kill_attempt_result', { ok: true, instant: true });
+      const target = room.state.players.get(targetId);
+      if (target?.socketId) io.to(target.socketId).emit('you_died');
+      broadcastRoomUpdate(room);
+      if (res.winner) io.to(room.state.code).emit('game_over', res.winner);
+      return;
+    }
+
+    socket.emit('kill_listen_start', { frequencyHz: res.frequencyHz, windowMs: res.windowMs });
+    const target = room.state.players.get(targetId);
+    if (target?.socketId) {
+      io.to(target.socketId).emit('begin_proximity_scan', {
+        windowMs: res.windowMs,
+        candidateFrequencies: PROXIMITY_FREQUENCIES_HZ,
+      });
+    }
+
+    clearKillAttemptTimer(room.state.code);
+    const timer = setTimeout(() => {
+      if (room.clearKillAttempt(playerId)) {
+        socket.emit('kill_attempt_result', {
+          ok: false,
+          reason: "Couldn't verify — get closer and try again.",
+        });
+      }
+    }, res.windowMs + 500);
+    killAttemptTimers.set(room.state.code, timer);
+  });
+
+  socket.on('cancel_kill_attempt', () => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    if (room.clearKillAttempt(playerId)) {
+      clearKillAttemptTimer(room.state.code);
+    }
+  });
+
+  socket.on('tone_detected', ({ frequencyHz }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.confirmKillAttempt(playerId, frequencyHz);
+    if (!res.ok) return;
+    clearKillAttemptTimer(room.state.code);
+    const killer = room.state.players.get(res.killerId);
+    if (killer?.socketId) io.to(killer.socketId).emit('kill_attempt_result', { ok: true });
+    socket.emit('you_died');
+    broadcastRoomUpdate(room);
+    if (res.winner) io.to(room.state.code).emit('game_over', res.winner);
+  });
+
   socket.on('trigger_vent', () => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
@@ -267,6 +346,7 @@ io.on('connection', (socket) => {
     const player = room.state.players.get(playerId);
     if (!player?.isHost) return;
     clearMeetingTimers(room.state.code);
+    clearKillAttemptTimer(room.state.code);
     room.resetToLobby();
     broadcastRoomUpdate(room);
   });
@@ -290,6 +370,7 @@ setInterval(() => {
   for (const [code, room] of rooms) {
     if (now - room.state.lastActivity > ROOM_IDLE_CLEANUP_MS) {
       clearMeetingTimers(code);
+      clearKillAttemptTimer(code);
       rooms.delete(code);
     }
   }

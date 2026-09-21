@@ -9,6 +9,15 @@ export interface ServerPlayer {
   status: PlayerStatus;
   tasks: PlayerTask[];
   connected: boolean;
+  /** Whether this player's client has confirmed mic access for the proximity handshake. Optimistic until told otherwise. */
+  micAvailable: boolean;
+}
+
+export interface PendingKillAttempt {
+  killerId: string;
+  targetId: string;
+  frequencyHz: number;
+  expiresAt: number;
 }
 
 export interface ServerMeeting {
@@ -34,4 +43,5 @@ export interface GameRoomState {
   ventAvailableUntil: number;
   meetingTimer: ReturnType<typeof setTimeout> | null;
   winner: 'crewmates' | 'impostors' | null;
+  pendingKill: PendingKillAttempt | null;
 }

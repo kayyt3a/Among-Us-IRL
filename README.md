@@ -16,8 +16,16 @@ play — no accounts, no app install, no QR codes or Bluetooth.
    fake task list.
 5. Tasks are completed on the honor system — just tap "Done".
 6. The impostor eliminates nearby players by tapping **Eliminate** and
-   picking a target (proximity is honor-code enforced, like the kill
-   button in Among Us).
+   picking a target. Proximity is verified with an audio handshake: the
+   impostor's phone plays a short near-ultrasonic tone (Web Audio), and
+   the target's phone silently listens for it via the mic (`getUserMedia`
+   + an FFT analyser) — if it hears the exact tone the server assigned
+   to that attempt, the two phones are close enough together and the
+   kill confirms. No pairing, Bluetooth, or GPS involved. If a phone's
+   mic is unavailable, or the check can't confirm within ~8s (party
+   noise, a cheap speaker, a locked screen), it falls back to an
+   honor-code "Eliminate anyway" button so a bad mic can never soft-lock
+   a kill.
 7. After a kill, the impostor has a short window to trigger **Vent** — a
    full-screen blackout broadcast to every device at once, so no one can
    use screen state to tell who's alive, dead, or the impostor.

@@ -10,6 +10,7 @@ import type {
   RoomStateSummary,
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
+import { playProximityTone, requestMicPermission, scanForTone } from '../audio/proximity';
 
 const STORAGE_KEY = 'irl-impostor-session';
 
@@ -18,6 +19,16 @@ interface Session {
   playerId: string;
   name: string;
 }
+
+interface KillAttemptState {
+  status: 'idle' | 'pending' | 'listening' | 'failed';
+  targetId: string | null;
+  targetName: string | null;
+  reason?: string;
+  windowMs?: number;
+}
+
+const idleKillAttempt: KillAttemptState = { status: 'idle', targetId: null, targetName: null };
 
 interface State {
   connected: boolean;
@@ -33,6 +44,7 @@ interface State {
   error: string | null;
   ventNonce: number;
   ventDurationMs: number;
+  killAttempt: KillAttemptState;
 }
 
 type Action =
@@ -49,7 +61,12 @@ type Action =
   | { type: 'clear_meeting_result' }
   | { type: 'game_over'; info: GameOverInfo }
   | { type: 'error'; message: string | null }
-  | { type: 'reset_round' };
+  | { type: 'reset_round' }
+  | { type: 'kill_attempt_start'; targetId: string; targetName: string }
+  | { type: 'kill_listen_start'; windowMs: number }
+  | { type: 'kill_attempt_success' }
+  | { type: 'kill_attempt_failed'; reason: string }
+  | { type: 'kill_attempt_cancel' };
 
 const initialState: State = {
   connected: false,
@@ -65,6 +82,7 @@ const initialState: State = {
   error: null,
   ventNonce: 0,
   ventDurationMs: 4000,
+  killAttempt: idleKillAttempt,
 };
 
 function reducer(state: State, action: Action): State {
@@ -114,7 +132,24 @@ function reducer(state: State, action: Action): State {
         dead: false,
         meetingResult: null,
         gameOver: null,
+        killAttempt: idleKillAttempt,
       };
+    case 'kill_attempt_start':
+      return {
+        ...state,
+        killAttempt: { status: 'pending', targetId: action.targetId, targetName: action.targetName },
+      };
+    case 'kill_listen_start':
+      return {
+        ...state,
+        killAttempt: { ...state.killAttempt, status: 'listening', windowMs: action.windowMs },
+      };
+    case 'kill_attempt_success':
+      return { ...state, killAttempt: idleKillAttempt };
+    case 'kill_attempt_failed':
+      return { ...state, killAttempt: { ...state.killAttempt, status: 'failed', reason: action.reason } };
+    case 'kill_attempt_cancel':
+      return { ...state, killAttempt: idleKillAttempt };
     default:
       return state;
   }
@@ -127,7 +162,11 @@ interface GameApi extends State {
   updateSettings: (partial: { tasksPerPlayer?: number; impostorCount?: number }) => void;
   startGame: () => void;
   completeTask: (taskId: string) => void;
+  /** Honor-code instant kill, no proximity check — the manual fallback. */
   killPlayer: (targetId: string) => void;
+  /** Proximity-verified kill attempt via the audio handshake. */
+  attemptKill: (targetId: string, targetName: string) => void;
+  cancelKillAttempt: () => void;
   triggerVent: () => void;
   callMeeting: (reason: MeetingReason) => void;
   castVote: (targetId: string | 'skip') => void;
@@ -144,6 +183,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const killToneStopRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -173,6 +213,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     function onGameStarted(payload: PrivateGameInfo) {
       dispatch({ type: 'game_started', payload });
+      requestMicPermission().then((available) => {
+        socket.emit('report_mic_status', { available });
+      });
     }
     function onTaskAck(payload: { taskId: string }) {
       dispatch({ type: 'task_local_done', taskId: payload.taskId });
@@ -195,6 +238,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
     function onKillResult(payload: { ok: boolean; message?: string }) {
       if (!payload.ok && payload.message) dispatch({ type: 'error', message: payload.message });
     }
+    function onKillListenStart(payload: { frequencyHz: number; windowMs: number }) {
+      killToneStopRef.current?.();
+      killToneStopRef.current = playProximityTone(payload.frequencyHz, payload.windowMs);
+      dispatch({ type: 'kill_listen_start', windowMs: payload.windowMs });
+    }
+    function onKillAttemptResult(payload: { ok: boolean; instant?: boolean; reason?: string }) {
+      killToneStopRef.current?.();
+      killToneStopRef.current = null;
+      if (payload.ok) {
+        dispatch({ type: 'kill_attempt_success' });
+      } else {
+        dispatch({ type: 'kill_attempt_failed', reason: payload.reason ?? 'Could not verify.' });
+      }
+    }
+    function onBeginProximityScan(payload: { windowMs: number; candidateFrequencies: number[] }) {
+      // Silent: no UI change here, so the target is never tipped off mid-scan.
+      scanForTone(payload.candidateFrequencies, payload.windowMs, (frequencyHz) => {
+        socket.emit('tone_detected', { frequencyHz });
+      });
+    }
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -207,6 +270,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('game_over', onGameOver);
     socket.on('error_message', onError);
     socket.on('kill_result', onKillResult);
+    socket.on('kill_listen_start', onKillListenStart);
+    socket.on('kill_attempt_result', onKillAttemptResult);
+    socket.on('begin_proximity_scan', onBeginProximityScan);
 
     if (socket.connected) onConnect();
 
@@ -222,6 +288,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('game_over', onGameOver);
       socket.off('error_message', onError);
       socket.off('kill_result', onKillResult);
+      socket.off('kill_listen_start', onKillListenStart);
+      socket.off('kill_attempt_result', onKillAttemptResult);
+      socket.off('begin_proximity_scan', onBeginProximityScan);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -281,6 +350,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
         socket.emit('complete_task', { taskId });
       },
       killPlayer: (targetId: string) => socket.emit('kill_player', { targetId }),
+      attemptKill: (targetId: string, targetName: string) => {
+        dispatch({ type: 'kill_attempt_start', targetId, targetName });
+        socket.emit('attempt_kill', { targetId });
+      },
+      cancelKillAttempt: () => {
+        killToneStopRef.current?.();
+        killToneStopRef.current = null;
+        socket.emit('cancel_kill_attempt');
+        dispatch({ type: 'kill_attempt_cancel' });
+      },
       triggerVent: () => socket.emit('trigger_vent'),
       callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
       castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),
