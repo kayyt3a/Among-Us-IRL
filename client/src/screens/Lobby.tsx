@@ -35,6 +35,27 @@ export default function Lobby() {
         </div>
       </div>
 
+      <div className="card stack">
+        <h3>Meeting spot</h3>
+        <p className="subtitle">
+          Everyone agrees on one real spot in the house — the couch, the kitchen table — and
+          heads there the moment a meeting is called.
+        </p>
+        {game.isHost ? (
+          <input
+            className="field"
+            placeholder="e.g. Living room couch"
+            value={settings.meetingSpot}
+            maxLength={40}
+            onChange={(e) => game.updateSettings({ meetingSpot: e.target.value })}
+          />
+        ) : (
+          <p style={{ margin: 0, fontWeight: 700 }}>
+            {settings.meetingSpot || 'Waiting for the host to set one…'}
+          </p>
+        )}
+      </div>
+
       {game.isHost ? (
         <div className="card stack">
           <h3>Settings</h3>
@@ -86,10 +107,14 @@ export default function Lobby() {
       {game.isHost && (
         <button
           className="btn btn-primary btn-block"
-          disabled={room.players.length < 3}
+          disabled={room.players.length < 3 || !settings.meetingSpot.trim()}
           onClick={game.startGame}
         >
-          {room.players.length < 3 ? 'Need at least 3 players' : 'Start game'}
+          {room.players.length < 3
+            ? 'Need at least 3 players'
+            : !settings.meetingSpot.trim()
+              ? 'Set a meeting spot to start'
+              : 'Start game'}
         </button>
       )}
     </div>

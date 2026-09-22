@@ -9,6 +9,7 @@ import {
   PlayerTask,
   PROXIMITY_FREQUENCIES_HZ,
   PROXIMITY_WINDOW_MS,
+  RoomSettings,
   RoomStateSummary,
 } from '@irl-impostor/shared';
 import {
@@ -40,6 +41,7 @@ export class GameRoom {
       playerOrder: [],
       tasksPerPlayer: DEFAULT_TASKS_PER_PLAYER,
       impostorCount: 1,
+      meetingSpot: '',
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -87,14 +89,17 @@ export class GameRoom {
     return this.alivePlayers.filter((p) => p.role === 'crewmate');
   }
 
-  updateSettings(tasksPerPlayer?: number, impostorCount?: number) {
+  updateSettings(partial: Partial<RoomSettings>) {
     if (this.state.phase !== 'lobby') return;
-    if (tasksPerPlayer) {
-      this.state.tasksPerPlayer = Math.max(3, Math.min(8, Math.floor(tasksPerPlayer)));
+    if (partial.tasksPerPlayer) {
+      this.state.tasksPerPlayer = Math.max(3, Math.min(8, Math.floor(partial.tasksPerPlayer)));
     }
-    if (impostorCount) {
+    if (partial.impostorCount) {
       const maxImpostors = Math.max(1, Math.floor(this.state.playerOrder.length / 3));
-      this.state.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(impostorCount)));
+      this.state.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(partial.impostorCount)));
+    }
+    if (partial.meetingSpot !== undefined) {
+      this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
     }
     this.touch();
   }
@@ -102,6 +107,9 @@ export class GameRoom {
   canStart(): { ok: true } | { ok: false; error: string } {
     if (this.state.playerOrder.length < MIN_PLAYERS) {
       return { ok: false, error: `Need at least ${MIN_PLAYERS} players to start.` };
+    }
+    if (!this.state.meetingSpot.trim()) {
+      return { ok: false, error: 'Set a meeting spot before starting.' };
     }
     if (this.state.impostorCount >= this.state.playerOrder.length) {
       return { ok: false, error: 'Too many impostors for this many players.' };
@@ -478,6 +486,7 @@ export class GameRoom {
       settings: {
         tasksPerPlayer: this.state.tasksPerPlayer,
         impostorCount: this.state.impostorCount,
+        meetingSpot: this.state.meetingSpot,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)

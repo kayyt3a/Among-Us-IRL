@@ -47,6 +47,8 @@ async function main() {
     });
   });
 
+  sockets[0].emit('update_settings', { meetingSpot: 'Living room couch' });
+  await wait(200);
   sockets[0].emit('start_game');
   await wait(300);
   console.log('roles:', names.map((n, i) => `${n}=${state.roles[i]}`).join(', '));

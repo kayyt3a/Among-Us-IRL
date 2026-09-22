@@ -108,9 +108,16 @@ export default function Game() {
       <div className="spacer" />
 
       {!game.dead && (
-        <button className="btn btn-block" onClick={() => game.callMeeting('emergency')}>
-          Call meeting
-        </button>
+        <div className="stack" style={{ gap: 6 }}>
+          {room.settings.meetingSpot && (
+            <p className="subtitle" style={{ textAlign: 'center', margin: 0 }}>
+              Meeting spot: <strong style={{ color: 'var(--text)' }}>{room.settings.meetingSpot}</strong>
+            </p>
+          )}
+          <button className="btn btn-block" onClick={() => game.callMeeting('emergency')}>
+            Call meeting
+          </button>
+        </div>
       )}
 
       {killing && (

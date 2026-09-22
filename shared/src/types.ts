@@ -45,6 +45,8 @@ export interface PrivateGameInfo {
 export interface RoomSettings {
   tasksPerPlayer: number;
   impostorCount: number;
+  /** Where players agree to physically gather when a meeting is called. Required to start. */
+  meetingSpot: string;
 }
 
 export interface MeetingVoteTally {

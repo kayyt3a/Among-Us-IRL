@@ -29,8 +29,11 @@ play — no accounts, no app install, no QR codes or Bluetooth.
 7. After a kill, the impostor has a short window to trigger **Vent** — a
    full-screen blackout broadcast to every device at once, so no one can
    use screen state to tell who's alive, dead, or the impostor.
-8. Anyone can **call a meeting** at any time. It syncs a discussion timer
-   and a vote across every device; the most-voted player is eliminated.
+8. Before starting, the host sets a **meeting spot** — a real place in
+   the house (the couch, the kitchen table). Anyone can **call a
+   meeting** at any time; every device shows "Everyone return to
+   [meeting spot]" plus a synced discussion timer and a vote, and the
+   most-voted player is eliminated.
 9. The game ends when all impostors are caught, or the impostors
    outnumber (or equal) the remaining crewmates, or crewmates finish
    every task.
@@ -93,9 +96,10 @@ discussion timer.
 
 ## Configuration
 
-Host-adjustable in the lobby: tasks per player (3–8) and impostor count
-(scales with player count). Everything else — meeting timers, the vent
-window, room idle cleanup — lives in `server/src/constants.ts`.
+Host-adjustable in the lobby: tasks per player (3–8), impostor count
+(scales with player count), and the meeting spot (required to start).
+Everything else — meeting timers, the vent window, room idle cleanup —
+lives in `server/src/constants.ts`.
 
 ## MVP scope
 

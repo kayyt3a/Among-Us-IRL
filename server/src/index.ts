@@ -179,7 +179,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = ctx;
     const player = room.state.players.get(playerId);
     if (!player?.isHost) return;
-    room.updateSettings(payload.tasksPerPlayer, payload.impostorCount);
+    room.updateSettings(payload);
     broadcastRoomUpdate(room);
   });
 

@@ -7,6 +7,7 @@ import type {
   PlayerRole,
   PlayerTask,
   PrivateGameInfo,
+  RoomSettings,
   RoomStateSummary,
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
@@ -159,7 +160,7 @@ interface GameApi extends State {
   createRoom: (name: string) => Promise<void>;
   joinRoom: (code: string, name: string) => Promise<void>;
   leaveGame: () => void;
-  updateSettings: (partial: { tasksPerPlayer?: number; impostorCount?: number }) => void;
+  updateSettings: (partial: Partial<RoomSettings>) => void;
   startGame: () => void;
   completeTask: (taskId: string) => void;
   /** Honor-code instant kill, no proximity check — the manual fallback. */

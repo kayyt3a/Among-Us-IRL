@@ -37,6 +37,7 @@ export interface GameRoomState {
   playerOrder: string[];
   tasksPerPlayer: number;
   impostorCount: number;
+  meetingSpot: string;
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;

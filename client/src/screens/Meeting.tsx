@@ -27,6 +27,20 @@ export default function Meeting() {
         <p className="subtitle">by {meeting.calledByName}</p>
       </div>
 
+      {room.settings.meetingSpot && (
+        <div
+          className="card center"
+          style={{ borderColor: 'var(--warn)', background: 'rgba(245, 185, 66, 0.08)' }}
+        >
+          <p className="subtitle" style={{ margin: 0 }}>
+            Everyone return to
+          </p>
+          <p style={{ fontSize: 24, fontWeight: 800, color: 'var(--warn)', margin: '4px 0 0' }}>
+            {room.settings.meetingSpot}
+          </p>
+        </div>
+      )}
+
       {meeting.phase === 'discussion' && (
         <div className="card center stack">
           <p className="subtitle">Discuss out loud. Voting opens in</p>
