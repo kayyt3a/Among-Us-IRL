@@ -9,6 +9,7 @@ import type {
   PrivateGameInfo,
   RoomSettings,
   RoomStateSummary,
+  SpecialRole,
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
 import { playProximityTone, requestMicPermission, scanForTone } from '../audio/proximity';
@@ -46,6 +47,11 @@ interface State {
   ventNonce: number;
   ventDurationMs: number;
   killAttempt: KillAttemptState;
+  mySpecialRole: SpecialRole | null;
+  /** Optimistic: set locally the moment the Judge/Guardian Angel ability is used. */
+  specialRoleUsed: boolean;
+  sabotageUsesRemaining: number;
+  sabotageAvailableAt: number;
 }
 
 type Action =
@@ -67,7 +73,9 @@ type Action =
   | { type: 'kill_listen_start'; windowMs: number }
   | { type: 'kill_attempt_success' }
   | { type: 'kill_attempt_failed'; reason: string }
-  | { type: 'kill_attempt_cancel' };
+  | { type: 'kill_attempt_cancel' }
+  | { type: 'sabotage_status'; usesRemaining: number; availableAt: number }
+  | { type: 'special_role_used' };
 
 const initialState: State = {
   connected: false,
@@ -84,6 +92,10 @@ const initialState: State = {
   ventNonce: 0,
   ventDurationMs: 4000,
   killAttempt: idleKillAttempt,
+  mySpecialRole: null,
+  specialRoleUsed: false,
+  sabotageUsesRemaining: 0,
+  sabotageAvailableAt: 0,
 };
 
 function reducer(state: State, action: Action): State {
@@ -104,6 +116,8 @@ function reducer(state: State, action: Action): State {
         myRole: action.payload.role,
         myTasks: action.payload.tasks,
         fellowImpostors: action.payload.fellowImpostors ?? [],
+        mySpecialRole: action.payload.specialRole ?? null,
+        specialRoleUsed: false,
         dead: false,
         gameOver: null,
       };
@@ -134,7 +148,15 @@ function reducer(state: State, action: Action): State {
         meetingResult: null,
         gameOver: null,
         killAttempt: idleKillAttempt,
+        mySpecialRole: null,
+        specialRoleUsed: false,
+        sabotageUsesRemaining: 0,
+        sabotageAvailableAt: 0,
       };
+    case 'sabotage_status':
+      return { ...state, sabotageUsesRemaining: action.usesRemaining, sabotageAvailableAt: action.availableAt };
+    case 'special_role_used':
+      return { ...state, specialRoleUsed: true };
     case 'kill_attempt_start':
       return {
         ...state,
@@ -169,6 +191,9 @@ interface GameApi extends State {
   attemptKill: (targetId: string, targetName: string) => void;
   cancelKillAttempt: () => void;
   triggerVent: () => void;
+  triggerSabotage: () => void;
+  judgeOverrule: (targetId: string) => void;
+  guardianProtect: (targetId: string) => void;
   callMeeting: (reason: MeetingReason) => void;
   castVote: (targetId: string | 'skip') => void;
   playAgain: () => void;
@@ -259,6 +284,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         socket.emit('tone_detected', { frequencyHz });
       });
     }
+    function onSabotageStatus(payload: { usesRemaining: number; availableAt: number }) {
+      dispatch({ type: 'sabotage_status', usesRemaining: payload.usesRemaining, availableAt: payload.availableAt });
+    }
+    function onSabotageTriggered() {
+      dispatch({ type: 'error', message: '⚠ Sabotage! The clock just got cut.' });
+    }
+    function onGuardianProtectionUsed() {
+      dispatch({ type: 'error', message: 'Your shield saved someone from elimination.' });
+    }
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -274,6 +308,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('kill_listen_start', onKillListenStart);
     socket.on('kill_attempt_result', onKillAttemptResult);
     socket.on('begin_proximity_scan', onBeginProximityScan);
+    socket.on('sabotage_status', onSabotageStatus);
+    socket.on('sabotage_triggered', onSabotageTriggered);
+    socket.on('guardian_protection_used', onGuardianProtectionUsed);
 
     if (socket.connected) onConnect();
 
@@ -292,6 +329,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('kill_listen_start', onKillListenStart);
       socket.off('kill_attempt_result', onKillAttemptResult);
       socket.off('begin_proximity_scan', onBeginProximityScan);
+      socket.off('sabotage_status', onSabotageStatus);
+      socket.off('sabotage_triggered', onSabotageTriggered);
+      socket.off('guardian_protection_used', onGuardianProtectionUsed);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -362,6 +402,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'kill_attempt_cancel' });
       },
       triggerVent: () => socket.emit('trigger_vent'),
+      triggerSabotage: () => socket.emit('trigger_sabotage'),
+      judgeOverrule: (targetId: string) => {
+        dispatch({ type: 'special_role_used' });
+        socket.emit('judge_overrule', { targetId });
+      },
+      guardianProtect: (targetId: string) => {
+        dispatch({ type: 'special_role_used' });
+        socket.emit('guardian_protect', { targetId });
+      },
       callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
       castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),
       playAgain: () => socket.emit('play_again'),

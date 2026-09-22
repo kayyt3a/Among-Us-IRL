@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ALL_TASKS,
+  COMMON_TASKS,
   GameOverInfo,
   MeetingReason,
   MeetingResult,
@@ -11,15 +12,30 @@ import {
   PROXIMITY_WINDOW_MS,
   RoomSettings,
   RoomStateSummary,
+  SpecialRole,
 } from '@irl-impostor/shared';
 import {
   DEFAULT_TASKS_PER_PLAYER,
+  GAME_DURATION_MS,
+  KILL_COOLDOWN_MS,
+  MAX_MEETINGS_PER_PLAYER,
+  MEETING_COOLDOWN_MS,
   MEETING_DISCUSSION_MS,
   MEETING_VOTING_MS,
   MIN_PLAYERS,
+  SABOTAGE_COOLDOWN_MS,
+  SABOTAGE_MAX_USES,
+  SABOTAGE_TIME_PENALTY_MS,
   VENT_WINDOW_MS,
 } from './constants';
 import { GameRoomState, ServerPlayer } from './internalTypes';
+
+type PrivateInfo = {
+  role: 'crewmate' | 'impostor';
+  tasks: PlayerTask[];
+  fellowImpostors?: { id: string; name: string }[];
+  specialRole?: SpecialRole;
+};
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -42,6 +58,8 @@ export class GameRoom {
       tasksPerPlayer: DEFAULT_TASKS_PER_PLAYER,
       impostorCount: 1,
       meetingSpot: '',
+      judgeEnabled: false,
+      guardianAngelEnabled: false,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -49,6 +67,13 @@ export class GameRoom {
       meetingTimer: null,
       winner: null,
       pendingKill: null,
+      nextMeetingAvailableAt: 0,
+      gameEndsAt: null,
+      sabotageUsesRemaining: SABOTAGE_MAX_USES,
+      sabotageAvailableAt: 0,
+      judgeId: null,
+      guardianAngelId: null,
+      protectedPlayerId: null,
     };
   }
 
@@ -68,6 +93,10 @@ export class GameRoom {
       tasks: [],
       connected: true,
       micAvailable: true,
+      specialRole: null,
+      specialRoleUsed: false,
+      meetingsCalled: 0,
+      killCooldownUntil: 0,
     };
     this.state.players.set(id, player);
     this.state.playerOrder.push(id);
@@ -89,6 +118,12 @@ export class GameRoom {
     return this.alivePlayers.filter((p) => p.role === 'crewmate');
   }
 
+  get allCrewmates(): ServerPlayer[] {
+    return this.state.playerOrder
+      .map((id) => this.state.players.get(id)!)
+      .filter((p) => p.role === 'crewmate');
+  }
+
   updateSettings(partial: Partial<RoomSettings>) {
     // The meeting spot is just a label, not something that affects role/task
     // assignment, so the host can change it any time — including mid-game, if
@@ -106,6 +141,10 @@ export class GameRoom {
       const maxImpostors = Math.max(1, Math.floor(this.state.playerOrder.length / 3));
       this.state.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(partial.impostorCount)));
     }
+    if (partial.judgeEnabled !== undefined) this.state.judgeEnabled = partial.judgeEnabled;
+    if (partial.guardianAngelEnabled !== undefined) {
+      this.state.guardianAngelEnabled = partial.guardianAngelEnabled;
+    }
     this.touch();
   }
 
@@ -122,19 +161,31 @@ export class GameRoom {
     return { ok: true };
   }
 
-  /** Assigns roles and deals out unique tasks to every player. Returns per-player private info. */
-  startGame(): Map<string, { role: 'crewmate' | 'impostor'; tasks: PlayerTask[] }> {
+  /** Assigns roles, special roles, and deals out unique tasks (plus the one shared common task) to every player. */
+  startGame(): Map<string, PrivateInfo> {
     const ids = shuffle(this.state.playerOrder);
     const impostorIds = new Set(ids.slice(0, this.state.impostorCount));
+    const crewmateIds = this.state.playerOrder.filter((id) => !impostorIds.has(id));
+
+    let judgeId: string | null = null;
+    let guardianAngelId: string | null = null;
+    if (this.state.judgeEnabled && crewmateIds.length > 0) {
+      judgeId = crewmateIds[Math.floor(Math.random() * crewmateIds.length)];
+    }
+    if (this.state.guardianAngelEnabled) {
+      const candidates = crewmateIds.filter((id) => id !== judgeId);
+      const pool = candidates.length > 0 ? candidates : crewmateIds;
+      if (pool.length > 0) guardianAngelId = pool[Math.floor(Math.random() * pool.length)];
+    }
+    this.state.judgeId = judgeId;
+    this.state.guardianAngelId = guardianAngelId;
 
     const neededTasks = this.state.playerOrder.length * this.state.tasksPerPlayer;
     const pool = shuffle(ALL_TASKS).slice(0, Math.min(neededTasks, ALL_TASKS.length));
+    const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
 
     let cursor = 0;
-    const result = new Map<
-      string,
-      { role: 'crewmate' | 'impostor'; tasks: PlayerTask[]; fellowImpostors?: { id: string; name: string }[] }
-    >();
+    const result = new Map<string, PrivateInfo>();
 
     for (const id of this.state.playerOrder) {
       const player = this.state.players.get(id)!;
@@ -143,11 +194,31 @@ export class GameRoom {
       for (let i = 0; i < this.state.tasksPerPlayer; i++) {
         const t = pool[cursor % pool.length];
         cursor++;
-        slice.push({ taskId: `${id}:${t.id}:${i}`, text: t.text, room: t.room, done: false });
+        slice.push({
+          taskId: `${id}:${t.id}:${i}`,
+          text: t.text,
+          room: t.room,
+          done: false,
+          visual: t.visual,
+          common: false,
+        });
       }
+      slice.push({
+        taskId: `${id}:${commonTask.id}`,
+        text: commonTask.text,
+        room: commonTask.room,
+        done: false,
+        visual: commonTask.visual,
+        common: true,
+      });
+
       player.role = role;
       player.tasks = slice;
       player.status = 'alive';
+      player.specialRole = id === judgeId ? 'judge' : id === guardianAngelId ? 'guardian-angel' : null;
+      player.specialRoleUsed = false;
+      player.meetingsCalled = 0;
+      player.killCooldownUntil = 0;
 
       const fellowImpostors =
         role === 'impostor' && impostorIds.size > 1
@@ -156,16 +227,27 @@ export class GameRoom {
               .map((otherId) => ({ id: otherId, name: this.state.players.get(otherId)!.name }))
           : undefined;
 
-      result.set(id, { role, tasks: slice, fellowImpostors });
+      result.set(id, {
+        role,
+        tasks: slice,
+        fellowImpostors,
+        specialRole: player.specialRole ?? undefined,
+      });
     }
 
     this.state.phase = 'playing';
     this.state.winner = null;
+    this.state.nextMeetingAvailableAt = 0;
+    this.state.pendingKill = null;
+    this.state.protectedPlayerId = null;
+    this.state.gameEndsAt = Date.now() + GAME_DURATION_MS;
+    this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
+    this.state.sabotageAvailableAt = 0;
     this.touch();
     return result;
   }
 
-  getPrivateInfo(playerId: string): { role: 'crewmate' | 'impostor'; tasks: PlayerTask[]; fellowImpostors?: { id: string; name: string }[] } | null {
+  getPrivateInfo(playerId: string): PrivateInfo | null {
     const player = this.state.players.get(playerId);
     if (!player || !player.role) return null;
     const fellowImpostors =
@@ -178,12 +260,15 @@ export class GameRoom {
       role: player.role,
       tasks: player.tasks,
       fellowImpostors: fellowImpostors && fellowImpostors.length > 0 ? fellowImpostors : undefined,
+      specialRole: player.specialRole ?? undefined,
     };
   }
 
   completeTask(playerId: string, taskId: string): boolean {
+    // Ghosts keep working their list — a dead crewmate's unfinished tasks
+    // still block the crew's task-completion win, same as real Among Us.
     const player = this.state.players.get(playerId);
-    if (!player || player.status !== 'alive') return false;
+    if (!player) return false;
     const task = player.tasks.find((t) => t.taskId === taskId);
     if (!task) return false;
     task.done = true;
@@ -194,21 +279,34 @@ export class GameRoom {
   private validateKill(
     killerId: string,
     targetId: string
-  ): { ok: true } | { ok: false; error: string } {
+  ): { ok: true } | { ok: false; error: string; reason?: 'shield' } {
     const killer = this.state.players.get(killerId);
     const target = this.state.players.get(targetId);
     if (!killer || killer.role !== 'impostor' || killer.status !== 'alive') {
       return { ok: false, error: 'Only a living impostor can do that.' };
     }
+    if (Date.now() < killer.killCooldownUntil) {
+      return { ok: false, error: 'Still on cooldown from the last kill.' };
+    }
     if (!target || target.status !== 'alive' || target.role === 'impostor') {
       return { ok: false, error: 'Invalid target.' };
+    }
+    if (targetId === this.state.protectedPlayerId) {
+      this.state.protectedPlayerId = null;
+      this.touch();
+      // Deliberately the same generic message as any other invalid target —
+      // the impostor should never be able to tell a shield apart from a
+      // wrong guess.
+      return { ok: false, error: 'Invalid target.', reason: 'shield' };
     }
     return { ok: true };
   }
 
-  private finalizeKill(targetId: string): GameOverInfo | null {
+  private finalizeKill(killerId: string, targetId: string): GameOverInfo | null {
+    const killer = this.state.players.get(killerId)!;
     const target = this.state.players.get(targetId)!;
     target.status = 'dead';
+    killer.killCooldownUntil = Date.now() + KILL_COOLDOWN_MS;
     this.state.ventAvailableUntil = Date.now() + VENT_WINDOW_MS;
     this.touch();
     return this.checkWinConditions();
@@ -218,10 +316,10 @@ export class GameRoom {
   killPlayer(
     killerId: string,
     targetId: string
-  ): { ok: true; winner: GameOverInfo | null } | { ok: false; error: string } {
+  ): { ok: true; winner: GameOverInfo | null } | { ok: false; error: string; reason?: 'shield' } {
     const check = this.validateKill(killerId, targetId);
     if (!check.ok) return check;
-    const winner = this.finalizeKill(targetId);
+    const winner = this.finalizeKill(killerId, targetId);
     return { ok: true, winner };
   }
 
@@ -241,7 +339,7 @@ export class GameRoom {
   ):
     | { ok: true; instant: true; winner: GameOverInfo | null }
     | { ok: true; instant: false; frequencyHz: number; windowMs: number }
-    | { ok: false; error: string } {
+    | { ok: false; error: string; reason?: 'shield' } {
     const check = this.validateKill(killerId, targetId);
     if (!check.ok) return check;
     if (this.state.pendingKill && this.state.pendingKill.expiresAt > Date.now()) {
@@ -250,7 +348,7 @@ export class GameRoom {
 
     const target = this.state.players.get(targetId)!;
     if (!target.micAvailable) {
-      const winner = this.finalizeKill(targetId);
+      const winner = this.finalizeKill(killerId, targetId);
       return { ok: true, instant: true, winner };
     }
 
@@ -282,7 +380,7 @@ export class GameRoom {
     }
     const { killerId, targetId } = pending;
     this.state.pendingKill = null;
-    const winner = this.finalizeKill(targetId);
+    const winner = this.finalizeKill(killerId, targetId);
     return { ok: true, killerId, winner };
   }
 
@@ -309,12 +407,71 @@ export class GameRoom {
     return true;
   }
 
-  callMeeting(callerId: string, reason: MeetingReason): MeetingState | null {
+  /** Spends a sabotage charge to cut the shared game clock down. */
+  triggerSabotage(
+    playerId: string
+  ):
+    | { ok: true; gameEndsAt: number; usesRemaining: number; availableAt: number }
+    | { ok: false; error: string } {
+    const player = this.state.players.get(playerId);
+    if (!player || player.role !== 'impostor' || player.status !== 'alive') {
+      return { ok: false, error: 'Only a living impostor can do that.' };
+    }
+    if (this.state.phase !== 'playing') {
+      return { ok: false, error: 'Can only sabotage during play.' };
+    }
+    if (this.state.sabotageUsesRemaining <= 0) {
+      return { ok: false, error: 'No sabotage charges left.' };
+    }
+    if (Date.now() < this.state.sabotageAvailableAt) {
+      return { ok: false, error: 'Sabotage is on cooldown.' };
+    }
+    if (this.state.gameEndsAt === null) {
+      return { ok: false, error: 'No active game clock.' };
+    }
+
+    this.state.sabotageUsesRemaining -= 1;
+    this.state.sabotageAvailableAt = Date.now() + SABOTAGE_COOLDOWN_MS;
+    this.state.gameEndsAt -= SABOTAGE_TIME_PENALTY_MS;
+    this.touch();
+    return {
+      ok: true,
+      gameEndsAt: this.state.gameEndsAt,
+      usesRemaining: this.state.sabotageUsesRemaining,
+      availableAt: this.state.sabotageAvailableAt,
+    };
+  }
+
+  isGameClockExpired(): boolean {
+    return this.state.phase === 'playing' && this.state.gameEndsAt !== null && Date.now() >= this.state.gameEndsAt;
+  }
+
+  /** If the clock has run out mid-play, the impostors win by default. */
+  expireGameClock(): GameOverInfo | null {
+    if (!this.isGameClockExpired()) return null;
+    this.state.winner = 'impostors';
+    this.state.phase = 'ended';
+    this.touch();
+    return this.gameOverInfo('impostors');
+  }
+
+  callMeeting(callerId: string, reason: MeetingReason): { ok: true; meeting: MeetingState } | { ok: false; error: string } {
     const caller = this.state.players.get(callerId);
-    if (!caller || caller.status !== 'alive') return null;
-    if (this.state.phase !== 'playing') return null;
+    if (!caller || caller.status !== 'alive') {
+      return { ok: false, error: 'Only living players can call a meeting.' };
+    }
+    if (this.state.phase !== 'playing') {
+      return { ok: false, error: 'Can only call a meeting during play.' };
+    }
+    if (caller.meetingsCalled >= MAX_MEETINGS_PER_PLAYER) {
+      return { ok: false, error: "You're out of meetings for this game." };
+    }
+    if (Date.now() < this.state.nextMeetingAvailableAt) {
+      return { ok: false, error: 'Meetings are on cooldown.' };
+    }
 
     const now = Date.now();
+    caller.meetingsCalled += 1;
     this.state.phase = 'meeting';
     this.state.meeting = {
       calledBy: callerId,
@@ -326,7 +483,7 @@ export class GameRoom {
       votes: new Map(),
     };
     this.touch();
-    return this.publicMeeting();
+    return { ok: true, meeting: this.publicMeeting()! };
   }
 
   advanceMeetingToVoting(): MeetingState | null {
@@ -385,9 +542,7 @@ export class GameRoom {
       }
     }
 
-    meeting.phase = 'results';
     this.touch();
-
     const winner = this.checkWinConditions();
 
     return {
@@ -396,8 +551,89 @@ export class GameRoom {
     };
   }
 
+  /**
+   * The Judge force-ejects someone during voting, bypassing the tally. A
+   * misfire (the target wasn't the impostor) ejects the Judge instead.
+   */
+  judgeOverrule(
+    judgeId: string,
+    targetId: string
+  ): { ok: true; result: MeetingResult; winner: GameOverInfo | null } | { ok: false; error: string } {
+    const judge = this.state.players.get(judgeId);
+    if (!judge || judge.status !== 'alive' || this.state.judgeId !== judgeId) {
+      return { ok: false, error: 'Only the living Judge can do that.' };
+    }
+    if (judge.specialRoleUsed) {
+      return { ok: false, error: "You've already used your overrule." };
+    }
+    if (!this.state.meeting || this.state.meeting.phase !== 'voting') {
+      return { ok: false, error: 'Can only overrule during voting.' };
+    }
+    const target = this.state.players.get(targetId);
+    if (!target || targetId === judgeId) {
+      return { ok: false, error: 'Invalid target.' };
+    }
+
+    judge.specialRoleUsed = true;
+
+    let eliminatedId: string;
+    let eliminatedName: string;
+    let eliminatedRole: 'crewmate' | 'impostor';
+    let judgeMisfired = false;
+
+    if (target.role === 'impostor') {
+      target.status = 'dead';
+      eliminatedId = target.id;
+      eliminatedName = target.name;
+      eliminatedRole = 'impostor';
+    } else {
+      judge.status = 'dead';
+      eliminatedId = judge.id;
+      eliminatedName = judge.name;
+      eliminatedRole = 'crewmate';
+      judgeMisfired = true;
+    }
+
+    this.touch();
+    const winner = this.checkWinConditions();
+
+    return {
+      ok: true,
+      result: {
+        eliminatedId,
+        eliminatedName,
+        eliminatedRole,
+        tally: [],
+        wasTie: false,
+        overruledByName: judge.name,
+        judgeMisfired,
+      },
+      winner,
+    };
+  }
+
+  /** The Guardian Angel shields one living player from the next kill attempt, once. */
+  guardianProtect(ghostId: string, targetId: string): { ok: true } | { ok: false; error: string } {
+    const ghost = this.state.players.get(ghostId);
+    if (!ghost || ghost.status !== 'dead' || this.state.guardianAngelId !== ghostId) {
+      return { ok: false, error: 'Only the Guardian Angel, once dead, can do that.' };
+    }
+    if (ghost.specialRoleUsed) {
+      return { ok: false, error: "You've already used your shield." };
+    }
+    const target = this.state.players.get(targetId);
+    if (!target || target.status !== 'alive') {
+      return { ok: false, error: 'Invalid target.' };
+    }
+    ghost.specialRoleUsed = true;
+    this.state.protectedPlayerId = targetId;
+    this.touch();
+    return { ok: true };
+  }
+
   closeMeeting() {
     this.state.meeting = null;
+    this.state.nextMeetingAvailableAt = Date.now() + MEETING_COOLDOWN_MS;
     if (this.state.phase === 'meeting') {
       this.state.phase = this.state.winner ? 'ended' : 'playing';
     }
@@ -414,10 +650,12 @@ export class GameRoom {
     } else if (impostorsAlive >= crewmatesAlive) {
       winner = 'impostors';
     } else {
-      const crewmatesDoneWithTasks = this.aliveCrewmates.every((p) =>
-        p.tasks.every((t) => t.done)
-      );
-      if (crewmatesDoneWithTasks && this.aliveCrewmates.length > 0) {
+      // Every crewmate's tasks — dead or alive — have to be done; a ghost's
+      // unfinished list still blocks the win, same as real Among Us.
+      const allCrewmates = this.allCrewmates;
+      const crewmatesDoneWithTasks =
+        allCrewmates.length > 0 && allCrewmates.every((p) => p.tasks.every((t) => t.done));
+      if (crewmatesDoneWithTasks) {
         winner = 'crewmates';
       }
     }
@@ -445,12 +683,23 @@ export class GameRoom {
       p.role = null;
       p.status = 'alive';
       p.tasks = [];
+      p.specialRole = null;
+      p.specialRoleUsed = false;
+      p.meetingsCalled = 0;
+      p.killCooldownUntil = 0;
     }
     this.state.phase = 'lobby';
     this.state.meeting = null;
     this.state.ventAvailableUntil = 0;
     this.state.winner = null;
     this.state.pendingKill = null;
+    this.state.nextMeetingAvailableAt = 0;
+    this.state.gameEndsAt = null;
+    this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
+    this.state.sabotageAvailableAt = 0;
+    this.state.judgeId = null;
+    this.state.guardianAngelId = null;
+    this.state.protectedPlayerId = null;
     this.touch();
   }
 
@@ -492,6 +741,8 @@ export class GameRoom {
         tasksPerPlayer: this.state.tasksPerPlayer,
         impostorCount: this.state.impostorCount,
         meetingSpot: this.state.meetingSpot,
+        judgeEnabled: this.state.judgeEnabled,
+        guardianAngelEnabled: this.state.guardianAngelEnabled,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)
@@ -508,6 +759,7 @@ export class GameRoom {
       meeting: this.publicMeeting(),
       ventAvailable: this.isVentAvailable(),
       ventEndsAt: this.state.ventAvailableUntil || null,
+      gameEndsAt: this.state.gameEndsAt,
     };
   }
 }

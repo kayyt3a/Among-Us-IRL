@@ -12,7 +12,7 @@ export default function MeetingResultOverlay() {
 
   if (!meetingResult) return null;
 
-  const { eliminatedName, eliminatedRole, wasTie } = meetingResult;
+  const { eliminatedName, eliminatedRole, wasTie, overruledByName, judgeMisfired } = meetingResult;
 
   return (
     <div
@@ -28,7 +28,24 @@ export default function MeetingResultOverlay() {
       }}
     >
       <div className="card stack center" style={{ maxWidth: 400 }}>
-        {eliminatedName ? (
+        {overruledByName ? (
+          <>
+            <div style={{ fontSize: 40 }}>👨‍⚖️</div>
+            <h2>{overruledByName} overruled the vote</h2>
+            <p className="subtitle">
+              {judgeMisfired ? (
+                <>
+                  {eliminatedName} wasn't the impostor — the Judge is ejected instead.
+                </>
+              ) : (
+                <>
+                  {eliminatedName} was ejected, and was the{' '}
+                  <strong style={{ color: 'var(--accent)' }}>impostor</strong>.
+                </>
+              )}
+            </p>
+          </>
+        ) : eliminatedName ? (
           <>
             <div style={{ fontSize: 40 }}>⚖️</div>
             <h2>{eliminatedName} was voted out</h2>

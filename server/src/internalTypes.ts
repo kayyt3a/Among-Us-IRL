@@ -1,4 +1,12 @@
-import { PlayerRole, PlayerStatus, PlayerTask, GamePhase, MeetingReason, MeetingPhase } from '@irl-impostor/shared';
+import {
+  PlayerRole,
+  PlayerStatus,
+  PlayerTask,
+  GamePhase,
+  MeetingReason,
+  MeetingPhase,
+  SpecialRole,
+} from '@irl-impostor/shared';
 
 export interface ServerPlayer {
   id: string;
@@ -11,6 +19,14 @@ export interface ServerPlayer {
   connected: boolean;
   /** Whether this player's client has confirmed mic access for the proximity handshake. Optimistic until told otherwise. */
   micAvailable: boolean;
+  /** Judge or Guardian Angel, if the room has those roles enabled. */
+  specialRole: SpecialRole | null;
+  /** Judge: has their one-time overrule been spent. Guardian Angel: has their one-time shield been spent. */
+  specialRoleUsed: boolean;
+  /** How many meetings this player has personally called this game. */
+  meetingsCalled: number;
+  /** Set after a kill; this player (as killer) can't attempt another until then. */
+  killCooldownUntil: number;
 }
 
 export interface PendingKillAttempt {
@@ -38,6 +54,8 @@ export interface GameRoomState {
   tasksPerPlayer: number;
   impostorCount: number;
   meetingSpot: string;
+  judgeEnabled: boolean;
+  guardianAngelEnabled: boolean;
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;
@@ -45,4 +63,13 @@ export interface GameRoomState {
   meetingTimer: ReturnType<typeof setTimeout> | null;
   winner: 'crewmates' | 'impostors' | null;
   pendingKill: PendingKillAttempt | null;
+  nextMeetingAvailableAt: number;
+  /** The shared game clock. Null until the game starts. */
+  gameEndsAt: number | null;
+  sabotageUsesRemaining: number;
+  sabotageAvailableAt: number;
+  judgeId: string | null;
+  guardianAngelId: string | null;
+  /** The one living player the Guardian Angel has shielded from the next kill. */
+  protectedPlayerId: string | null;
 }

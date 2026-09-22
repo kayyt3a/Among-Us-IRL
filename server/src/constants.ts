@@ -11,4 +11,16 @@ export const MEETING_VOTING_MS = 30_000;
 export const VENT_WINDOW_MS = 20_000; // how long vent stays available after a kill
 export const VENT_DURATION_MS = 4_000; // how long the blackout lasts on every screen
 
+export const KILL_COOLDOWN_MS = 45_000; // how long a killer waits before they can strike again
+
+export const MAX_MEETINGS_PER_PLAYER = 1; // emergency meetings each player gets per game
+export const MEETING_COOLDOWN_MS = 20_000; // how long after a meeting ends before another can be called
+
+// The shared game clock: crew must finish tasks / catch the impostors before
+// it runs out, or the impostors win by default. Sabotage cuts it down.
+export const GAME_DURATION_MS = 20 * 60 * 1000;
+export const SABOTAGE_TIME_PENALTY_MS = 15_000;
+export const SABOTAGE_MAX_USES = 3;
+export const SABOTAGE_COOLDOWN_MS = 45_000;
+
 export const ROOM_IDLE_CLEANUP_MS = 4 * 60 * 60 * 1000; // sweep rooms idle for 4h

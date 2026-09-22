@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useGame } from '../state/GameProvider';
 import type { RoomType } from '@irl-impostor/shared';
+import Countdown from '../components/Countdown';
 
 const ROOM_LABELS: Record<RoomType, string> = {
   kitchen: 'Kitchen',
@@ -17,10 +18,14 @@ export default function Game() {
   const [killing, setKilling] = useState(false);
   const [editingSpot, setEditingSpot] = useState(false);
   const [spotDraft, setSpotDraft] = useState('');
+  const [protecting, setProtecting] = useState(false);
+
+  const commonTask = game.myTasks.find((t) => t.common) ?? null;
 
   const grouped = useMemo(() => {
     const map = new Map<RoomType, typeof game.myTasks>();
     for (const t of game.myTasks) {
+      if (t.common) continue;
       const list = map.get(t.room) ?? [];
       list.push(t);
       map.set(t.room, list);
@@ -33,6 +38,11 @@ export default function Game() {
   const killTargets = room.players.filter(
     (p) => p.id !== game.session?.playerId && p.status === 'alive'
   );
+  const protectTargets = room.players.filter((p) => p.status === 'alive');
+
+  const sabotageReady = game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt;
+  const canGuardianProtect =
+    game.dead && game.mySpecialRole === 'guardian-angel' && !game.specialRoleUsed;
 
   return (
     <div className={`app-shell stack ${game.dead ? 'ghost-overlay' : ''}`}>
@@ -44,12 +54,29 @@ export default function Game() {
         </span>
       </div>
 
+      {room.gameEndsAt && (
+        <div className="card center" style={{ padding: 12 }}>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Time left
+          </p>
+          <div style={{ fontSize: 26 }}>
+            <Countdown endsAt={room.gameEndsAt} />
+          </div>
+        </div>
+      )}
+
       {game.dead ? (
         <div className="card center">
           <h2>👻 You are a ghost</h2>
           <p className="subtitle">
-            Stay quiet. You can keep watching but can't call meetings or vote.
+            Stay quiet. You can keep watching, finish your own tasks, but can't call meetings or
+            vote.
           </p>
+          {canGuardianProtect && (
+            <button className="btn btn-primary btn-block" style={{ marginTop: 10 }} onClick={() => setProtecting(true)}>
+              Protect a player
+            </button>
+          )}
         </div>
       ) : (
         <div className={`role-banner ${game.myRole ?? ''}`}>
@@ -65,6 +92,13 @@ export default function Game() {
               {game.fellowImpostors.map((f) => f.name).join(', ')}
             </p>
           )}
+          {!isImpostor && game.mySpecialRole && (
+            <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+              {game.mySpecialRole === 'judge'
+                ? "You're the Judge — during a vote you can overrule the result once."
+                : "You're the Guardian Angel — once you die, you can shield a living player once."}
+            </p>
+          )}
         </div>
       )}
 
@@ -77,12 +111,27 @@ export default function Game() {
           >
             Eliminate
           </button>
-          <button
-            className="btn btn-block"
-            disabled={!room.ventAvailable}
-            onClick={game.triggerVent}
-          >
+          <button className="btn btn-block" disabled={!room.ventAvailable} onClick={game.triggerVent}>
             {room.ventAvailable ? 'Vent (blackout)' : 'Vent unavailable'}
+          </button>
+          <button className="btn btn-block" disabled={!sabotageReady} onClick={game.triggerSabotage}>
+            {sabotageReady ? `Sabotage (${game.sabotageUsesRemaining})` : 'Sabotage unavailable'}
+          </button>
+        </div>
+      )}
+
+      {commonTask && (
+        <div className="card stack-sm" style={{ borderColor: 'var(--warn)' }}>
+          <span className="task-room">Everyone's task</span>
+          <button
+            className={`task-item ${commonTask.done ? 'done' : ''}`}
+            disabled={commonTask.done}
+            onClick={() => game.completeTask(commonTask.taskId)}
+            style={{ textAlign: 'left', width: '100%', cursor: commonTask.done ? 'default' : 'pointer' }}
+          >
+            <span className={`task-check ${commonTask.done ? 'checked' : ''}`}>{commonTask.done ? '✓' : ''}</span>
+            <span style={{ flex: 1 }}>{commonTask.text}</span>
+            {commonTask.visual && <span className="badge">Visual</span>}
           </button>
         </div>
       )}
@@ -95,12 +144,13 @@ export default function Game() {
               <button
                 key={t.taskId}
                 className={`task-item ${t.done ? 'done' : ''}`}
-                disabled={t.done || game.dead}
+                disabled={t.done}
                 onClick={() => game.completeTask(t.taskId)}
                 style={{ textAlign: 'left', width: '100%', cursor: t.done ? 'default' : 'pointer' }}
               >
                 <span className={`task-check ${t.done ? 'checked' : ''}`}>{t.done ? '✓' : ''}</span>
                 <span style={{ flex: 1 }}>{t.text}</span>
+                {t.visual && <span className="badge">Visual</span>}
               </button>
             ))}
           </div>
@@ -178,6 +228,33 @@ export default function Game() {
               </button>
             ))}
             <button className="btn btn-ghost btn-block" onClick={() => setKilling(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {protecting && (
+        <div
+          className="toast"
+          style={{ top: 0, bottom: 'auto', position: 'fixed', maxHeight: '80dvh', overflowY: 'auto' }}
+        >
+          <h3>Shield who from the next kill?</h3>
+          <p className="subtitle">You only get to do this once — choose carefully.</p>
+          <div className="stack">
+            {protectTargets.map((p) => (
+              <button
+                key={p.id}
+                className="btn btn-primary btn-block"
+                onClick={() => {
+                  game.guardianProtect(p.id);
+                  setProtecting(false);
+                }}
+              >
+                {p.name}
+              </button>
+            ))}
+            <button className="btn btn-ghost btn-block" onClick={() => setProtecting(false)}>
               Cancel
             </button>
           </div>

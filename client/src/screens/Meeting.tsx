@@ -7,11 +7,14 @@ export default function Meeting() {
   const room = game.room!;
   const meeting = room.meeting!;
   const [votedFor, setVotedFor] = useState<string | null>(null);
+  const [overruling, setOverruling] = useState(false);
 
   const me = game.me;
   const iAmAlive = me?.status === 'alive';
   const alivePlayers = room.players.filter((p) => p.status === 'alive');
   const hasVoted = votedFor !== null || (!!me && meeting.votedPlayerIds.includes(me.id));
+  const canOverrule =
+    game.mySpecialRole === 'judge' && iAmAlive && !game.specialRoleUsed && meeting.phase === 'voting';
 
   function vote(targetId: string | 'skip') {
     if (hasVoted || !iAmAlive) return;
@@ -82,7 +85,44 @@ export default function Meeting() {
               </button>
             </div>
           )}
+
+          {canOverrule && (
+            <button className="btn btn-outline btn-block" onClick={() => setOverruling(true)}>
+              Overrule the vote (Judge)
+            </button>
+          )}
         </>
+      )}
+
+      {overruling && (
+        <div
+          className="toast"
+          style={{ top: 0, bottom: 'auto', position: 'fixed', maxHeight: '80dvh', overflowY: 'auto' }}
+        >
+          <h3>Force-eject who?</h3>
+          <p className="subtitle">
+            One shot only. If they're not the impostor, you're ejected instead.
+          </p>
+          <div className="stack">
+            {alivePlayers
+              .filter((p) => p.id !== me?.id)
+              .map((p) => (
+                <button
+                  key={p.id}
+                  className="btn btn-danger btn-block"
+                  onClick={() => {
+                    game.judgeOverrule(p.id);
+                    setOverruling(false);
+                  }}
+                >
+                  {p.name}
+                </button>
+              ))}
+            <button className="btn btn-ghost btn-block" onClick={() => setOverruling(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

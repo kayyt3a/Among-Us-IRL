@@ -97,6 +97,40 @@ export default function Lobby() {
               +
             </button>
           </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Judge
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                One crewmate can force-eject once — wrong guess ejects them instead
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.judgeEnabled ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ judgeEnabled: !settings.judgeEnabled })}
+            >
+              {settings.judgeEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Guardian Angel
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                One crewmate can shield a player from a kill, once they've died
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.guardianAngelEnabled ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ guardianAngelEnabled: !settings.guardianAngelEnabled })}
+            >
+              {settings.guardianAngelEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
       ) : (
         <p className="subtitle center">Waiting for the host to start the game…</p>

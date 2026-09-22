@@ -10,6 +10,8 @@ export interface Task {
   id: string;
   room: RoomType;
   text: string;
+  /** A visual task is something a bystander could actually see you do — a stronger alibi. */
+  visual: boolean;
 }
 
 export interface PlayerTask {
@@ -17,6 +19,9 @@ export interface PlayerTask {
   text: string;
   room: RoomType;
   done: boolean;
+  visual: boolean;
+  /** True for the one task every player (crew and impostor) is dealt this game. */
+  common: boolean;
 }
 
 export type PlayerRole = 'crewmate' | 'impostor';
@@ -24,6 +29,8 @@ export type PlayerStatus = 'alive' | 'dead';
 export type GamePhase = 'lobby' | 'playing' | 'meeting' | 'ended';
 export type MeetingReason = 'report' | 'emergency';
 export type MeetingPhase = 'discussion' | 'voting' | 'results';
+/** Optional extra crewmate roles, layered on top of the base crewmate/impostor split. */
+export type SpecialRole = 'judge' | 'guardian-angel';
 
 /** Public player info sent to everyone (no role, no tasks). */
 export interface PublicPlayer {
@@ -40,6 +47,8 @@ export interface PrivateGameInfo {
   tasks: PlayerTask[];
   /** Other impostors, only populated for impostors when there is more than one. */
   fellowImpostors?: { id: string; name: string }[];
+  /** Set if this crewmate was dealt the Judge or was the one designated eligible for Guardian Angel. Guardian Angel only activates once they've died. */
+  specialRole?: SpecialRole;
 }
 
 export interface RoomSettings {
@@ -47,6 +56,10 @@ export interface RoomSettings {
   impostorCount: number;
   /** Where players agree to physically gather when a meeting is called. Required to start. */
   meetingSpot: string;
+  /** One crewmate can force-eject once during a vote; a wrong call ejects them instead. */
+  judgeEnabled: boolean;
+  /** The first crewmate to die can shield one living player from the next kill, once. */
+  guardianAngelEnabled: boolean;
 }
 
 export interface MeetingVoteTally {
@@ -71,6 +84,10 @@ export interface MeetingResult {
   eliminatedRole: PlayerRole | null;
   tally: MeetingVoteTally[];
   wasTie: boolean;
+  /** Set when the Judge overruled the vote instead of it resolving normally. */
+  overruledByName?: string;
+  /** Set when the Judge's overrule misfired (target wasn't the impostor) and the Judge was ejected instead. */
+  judgeMisfired?: boolean;
 }
 
 export interface GameOverInfo {
@@ -86,6 +103,8 @@ export interface RoomStateSummary {
   meeting: MeetingState | null;
   ventAvailable: boolean;
   ventEndsAt: number | null;
+  /** The shared game clock — when it runs out, the impostors win by default. Null before the game starts. */
+  gameEndsAt: number | null;
 }
 
 // ---- Socket.IO event payloads ----
@@ -109,6 +128,14 @@ export interface ServerToClientEvents {
   meeting_result: (payload: MeetingResult) => void;
   game_over: (payload: GameOverInfo) => void;
   error_message: (payload: { message: string }) => void;
+  /** Impostor-only: current sabotage charges and when the next one is available. */
+  sabotage_status: (payload: { usesRemaining: number; availableAt: number }) => void;
+  /** Broadcast to everyone the instant a sabotage lands, so the clock jump has a beat to it. */
+  sabotage_triggered: () => void;
+  /** Sent to a crewmate the moment they become the Guardian Angel (i.e. right after they die, if the role is on). */
+  guardian_angel_assigned: () => void;
+  /** Private confirmation to the Guardian Angel that their shield just saved someone. */
+  guardian_protection_used: () => void;
 }
 
 export interface ClientToServerEvents {
@@ -139,4 +166,10 @@ export interface ClientToServerEvents {
   call_meeting: (payload: { reason: MeetingReason }) => void;
   cast_vote: (payload: { targetId: string | 'skip' }) => void;
   play_again: () => void;
+  /** Impostor-only: spend a sabotage charge to cut the shared game clock. */
+  trigger_sabotage: () => void;
+  /** The Judge's one-time vote overrule. */
+  judge_overrule: (payload: { targetId: string }) => void;
+  /** The Guardian Angel's one-time shield. */
+  guardian_protect: (payload: { targetId: string }) => void;
 }

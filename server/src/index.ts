@@ -38,6 +38,7 @@ interface SocketMeta {
 const socketMeta = new Map<string, SocketMeta>();
 const meetingTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
 const killAttemptTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const gameClockTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function clearMeetingTimers(code: string) {
   const timers = meetingTimers.get(code);
@@ -55,19 +56,76 @@ function clearKillAttemptTimer(code: string) {
   }
 }
 
+function clearGameClockTimer(code: string) {
+  const timer = gameClockTimers.get(code);
+  if (timer) {
+    clearTimeout(timer);
+    gameClockTimers.delete(code);
+  }
+}
+
 function broadcastRoomUpdate(room: GameRoom) {
   io.to(room.state.code).emit('room_update', room.publicState());
 }
 
-function endMeetingAndBroadcast(room: GameRoom) {
+function sendSabotageStatus(room: GameRoom) {
+  for (const id of room.state.playerOrder) {
+    const p = room.state.players.get(id)!;
+    if (p.role === 'impostor' && p.socketId) {
+      io.to(p.socketId).emit('sabotage_status', {
+        usesRemaining: room.state.sabotageUsesRemaining,
+        availableAt: room.state.sabotageAvailableAt,
+      });
+    }
+  }
+}
+
+function notifyGuardianShieldUsed(room: GameRoom) {
+  const guardian = room.state.guardianAngelId ? room.state.players.get(room.state.guardianAngelId) : null;
+  if (guardian?.socketId) io.to(guardian.socketId).emit('guardian_protection_used');
+}
+
+/** Schedules the check that ends the game if the clock runs out mid-play. */
+function scheduleGameClock(room: GameRoom) {
+  const code = room.state.code;
+  clearGameClockTimer(code);
+  if (room.state.gameEndsAt === null) return;
+  const timer = setTimeout(() => {
+    const winner = room.expireGameClock();
+    if (winner) {
+      io.to(code).emit('game_over', winner);
+      broadcastRoomUpdate(room);
+    }
+  }, Math.max(0, room.state.gameEndsAt - Date.now()));
+  gameClockTimers.set(code, timer);
+}
+
+function finishMeeting(
+  room: GameRoom,
+  result: ReturnType<GameRoom['resolveMeeting']>['result'],
+  winner: ReturnType<GameRoom['resolveMeeting']>['winner']
+) {
   clearMeetingTimers(room.state.code);
-  const { result, winner } = room.resolveMeeting();
   io.to(room.state.code).emit('meeting_result', result);
   room.closeMeeting();
   broadcastRoomUpdate(room);
   if (winner) {
     io.to(room.state.code).emit('game_over', winner);
+  } else if (room.isGameClockExpired()) {
+    // The clock could have run out while everyone was busy in the meeting.
+    const timeoutWinner = room.expireGameClock();
+    if (timeoutWinner) {
+      io.to(room.state.code).emit('game_over', timeoutWinner);
+      broadcastRoomUpdate(room);
+    }
+  } else {
+    scheduleGameClock(room);
   }
+}
+
+function endMeetingAndBroadcast(room: GameRoom) {
+  const { result, winner } = room.resolveMeeting();
+  finishMeeting(room, result, winner);
 }
 
 function scheduleMeetingTimers(room: GameRoom) {
@@ -166,6 +224,12 @@ io.on('connection', (socket) => {
       const info = room.getPrivateInfo(playerId);
       if (info) socket.emit('game_started', info);
       if (player.status === 'dead') socket.emit('you_died');
+      if (player.role === 'impostor') {
+        socket.emit('sabotage_status', {
+          usesRemaining: room.state.sabotageUsesRemaining,
+          availableAt: room.state.sabotageAvailableAt,
+        });
+      }
     }
     if (room.state.meeting) {
       socket.emit('meeting_called', room.publicMeeting()!);
@@ -202,6 +266,8 @@ io.on('connection', (socket) => {
         io.to(p.socketId).emit('game_started', info);
       }
     }
+    sendSabotageStatus(room);
+    scheduleGameClock(room);
     broadcastRoomUpdate(room);
   });
 
@@ -213,6 +279,7 @@ io.on('connection', (socket) => {
       socket.emit('task_ack', { taskId });
       const winner = room.checkWinConditions();
       if (winner) {
+        clearGameClockTimer(room.state.code);
         io.to(room.state.code).emit('game_over', winner);
         broadcastRoomUpdate(room);
       }
@@ -226,6 +293,7 @@ io.on('connection', (socket) => {
     const res = room.killPlayer(playerId, targetId);
     if (!res.ok) {
       socket.emit('kill_result', { ok: false, message: res.error });
+      if (res.reason === 'shield') notifyGuardianShieldUsed(room);
       return;
     }
     socket.emit('kill_result', { ok: true });
@@ -233,6 +301,7 @@ io.on('connection', (socket) => {
     if (target?.socketId) io.to(target.socketId).emit('you_died');
     broadcastRoomUpdate(room);
     if (res.winner) {
+      clearGameClockTimer(room.state.code);
       io.to(room.state.code).emit('game_over', res.winner);
     }
   });
@@ -250,6 +319,7 @@ io.on('connection', (socket) => {
     const res = room.startKillAttempt(playerId, targetId);
     if (!res.ok) {
       socket.emit('kill_attempt_result', { ok: false, reason: res.error });
+      if (res.reason === 'shield') notifyGuardianShieldUsed(room);
       return;
     }
 
@@ -258,7 +328,10 @@ io.on('connection', (socket) => {
       const target = room.state.players.get(targetId);
       if (target?.socketId) io.to(target.socketId).emit('you_died');
       broadcastRoomUpdate(room);
-      if (res.winner) io.to(room.state.code).emit('game_over', res.winner);
+      if (res.winner) {
+        clearGameClockTimer(room.state.code);
+        io.to(room.state.code).emit('game_over', res.winner);
+      }
       return;
     }
 
@@ -303,7 +376,10 @@ io.on('connection', (socket) => {
     if (killer?.socketId) io.to(killer.socketId).emit('kill_attempt_result', { ok: true });
     socket.emit('you_died');
     broadcastRoomUpdate(room);
-    if (res.winner) io.to(room.state.code).emit('game_over', res.winner);
+    if (res.winner) {
+      clearGameClockTimer(room.state.code);
+      io.to(room.state.code).emit('game_over', res.winner);
+    }
   });
 
   socket.on('trigger_vent', () => {
@@ -316,13 +392,31 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('trigger_sabotage', () => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.triggerSabotage(playerId);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    scheduleGameClock(room);
+    io.to(room.state.code).emit('sabotage_triggered');
+    broadcastRoomUpdate(room);
+    sendSabotageStatus(room);
+  });
+
   socket.on('call_meeting', ({ reason }) => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
     const { room, playerId } = ctx;
-    const meeting = room.callMeeting(playerId, reason);
-    if (!meeting) return;
-    io.to(room.state.code).emit('meeting_called', meeting);
+    const res = room.callMeeting(playerId, reason);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    io.to(room.state.code).emit('meeting_called', res.meeting);
     broadcastRoomUpdate(room);
     scheduleMeetingTimers(room);
   });
@@ -339,6 +433,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('judge_overrule', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.judgeOverrule(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    finishMeeting(room, res.result, res.winner);
+  });
+
+  socket.on('guardian_protect', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.guardianProtect(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+  });
+
   socket.on('play_again', () => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
@@ -347,6 +464,7 @@ io.on('connection', (socket) => {
     if (!player?.isHost) return;
     clearMeetingTimers(room.state.code);
     clearKillAttemptTimer(room.state.code);
+    clearGameClockTimer(room.state.code);
     room.resetToLobby();
     broadcastRoomUpdate(room);
   });
@@ -371,6 +489,7 @@ setInterval(() => {
     if (now - room.state.lastActivity > ROOM_IDLE_CLEANUP_MS) {
       clearMeetingTimers(code);
       clearKillAttemptTimer(code);
+      clearGameClockTimer(code);
       rooms.delete(code);
     }
   }

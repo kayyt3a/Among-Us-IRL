@@ -14,7 +14,12 @@ play — no accounts, no app install, no QR codes or Bluetooth.
    (kitchen, bathroom, living room, bedroom, outdoor, anywhere) — no task
    repeats within a session. The impostor gets an identical-looking but
    fake task list.
-5. Tasks are completed on the honor system — just tap "Done".
+5. Tasks are completed on the honor system — just tap "Done". Every
+   player also gets one shared **common task** (the "swipe card"
+   equivalent — e.g. grab a square of toilet paper and hold it up),
+   and tasks are tagged **visual** when a bystander could actually
+   watch you do them, both real Among Us mechanics for catching an
+   impostor who's clearly never done the thing.
 6. The impostor eliminates nearby players by tapping **Eliminate** and
    picking a target. Proximity is verified with an audio handshake: the
    impostor's phone plays a short near-ultrasonic tone (Web Audio), and
@@ -34,9 +39,21 @@ play — no accounts, no app install, no QR codes or Bluetooth.
    meeting** at any time; every device shows "Everyone return to
    [meeting spot]" plus a synced discussion timer and a vote, and the
    most-voted player is eliminated.
-9. The game ends when all impostors are caught, or the impostors
-   outnumber (or equal) the remaining crewmates, or crewmates finish
-   every task.
+9. A shared **game clock** (20 minutes by default) runs the whole
+   match — if it hits zero, the impostors win by default. The
+   impostor has a handful of **sabotage** charges that each cut a
+   chunk off the clock (with a cooldown between uses, so it can't be
+   spammed) — no reactor/O2 stations to physically go stand at, just
+   pressure everyone can see ticking down.
+10. Two optional roles, toggled by the host before starting: the
+    **Judge** can force-eject anyone once during a vote — get it
+    wrong and the Judge is ejected instead; the **Guardian Angel**,
+    once they've died, can shield one living player from the next
+    kill, once.
+11. The game ends when all impostors are caught, the impostors
+    outnumber (or equal) the remaining crewmates, every crewmate's
+    tasks are done (ghosts keep working their list — an unfinished
+    one still blocks the win), or the clock runs out.
 
 ## Tech stack
 
@@ -94,19 +111,30 @@ node scripts/smoke-test.mjs
 It takes about a minute to run since it waits out the real meeting
 discussion timer.
 
+`scripts/pacing-test.mjs` covers the newer mechanics specifically:
+common-task assignment, the per-killer kill cooldown, the Guardian
+Angel shield blocking a kill, sabotage's charge count/cooldown/clock
+drain, and the per-player meeting limit + cooldown. Run it the same
+way (`npm run test:pacing`) — it also takes about a minute, for the
+same reason.
+
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count
-(scales with player count), and the meeting spot (required to start).
-Everything else — meeting timers, the vent window, room idle cleanup —
-lives in `server/src/constants.ts`.
+(scales with player count), the meeting spot (required to start), and
+whether the Judge / Guardian Angel roles are in play. Everything else —
+meeting timers, the vent window, kill cooldown, meeting limit/cooldown,
+game clock length, sabotage charges/cooldown/penalty, room idle
+cleanup — lives in `server/src/constants.ts`.
 
 ## MVP scope
 
-Implemented: room creation/join, secret role + unique task assignment,
-task pools for 6 room types, kill + blackout vent, meetings with a
-synced timer and vote, win conditions, reconnect-on-refresh, and a PWA
-manifest so the app can be added to a phone's home screen.
+Implemented: room creation/join, secret role + unique task assignment
+(plus a shared common task and visual-task tagging), kill + blackout
+vent, a shared game clock with scarce sabotage charges, meetings with
+a synced timer and vote, optional Judge and Guardian Angel roles, win
+conditions, reconnect-on-refresh, and a PWA manifest so the app can be
+added to a phone's home screen.
 
 Not implemented yet (see the project spec for the full list): ads,
 accounts, custom/host-defined task packs, themed task packs.
