@@ -15,6 +15,8 @@ export default function Game() {
   const game = useGame();
   const room = game.room!;
   const [killing, setKilling] = useState(false);
+  const [editingSpot, setEditingSpot] = useState(false);
+  const [spotDraft, setSpotDraft] = useState('');
 
   const grouped = useMemo(() => {
     const map = new Map<RoomType, typeof game.myTasks>();
@@ -109,10 +111,45 @@ export default function Game() {
 
       {!game.dead && (
         <div className="stack" style={{ gap: 6 }}>
-          {room.settings.meetingSpot && (
-            <p className="subtitle" style={{ textAlign: 'center', margin: 0 }}>
-              Meeting spot: <strong style={{ color: 'var(--text)' }}>{room.settings.meetingSpot}</strong>
-            </p>
+          {game.isHost ? (
+            editingSpot ? (
+              <div className="row">
+                <input
+                  className="field"
+                  value={spotDraft}
+                  maxLength={40}
+                  autoFocus
+                  onChange={(e) => setSpotDraft(e.target.value)}
+                />
+                <button
+                  className="btn btn-sm btn-primary"
+                  disabled={!spotDraft.trim()}
+                  onClick={() => {
+                    game.updateSettings({ meetingSpot: spotDraft });
+                    setEditingSpot(false);
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ alignSelf: 'center' }}
+                onClick={() => {
+                  setSpotDraft(room.settings.meetingSpot);
+                  setEditingSpot(true);
+                }}
+              >
+                Meeting spot: <strong style={{ color: 'var(--text)' }}>{room.settings.meetingSpot}</strong> · edit
+              </button>
+            )
+          ) : (
+            room.settings.meetingSpot && (
+              <p className="subtitle" style={{ textAlign: 'center', margin: 0 }}>
+                Meeting spot: <strong style={{ color: 'var(--text)' }}>{room.settings.meetingSpot}</strong>
+              </p>
+            )
           )}
           <button className="btn btn-block" onClick={() => game.callMeeting('emergency')}>
             Call meeting

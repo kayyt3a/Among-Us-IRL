@@ -90,6 +90,14 @@ export class GameRoom {
   }
 
   updateSettings(partial: Partial<RoomSettings>) {
+    // The meeting spot is just a label, not something that affects role/task
+    // assignment, so the host can change it any time — including mid-game, if
+    // the agreed spot stops working out.
+    if (partial.meetingSpot !== undefined) {
+      this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
+      this.touch();
+    }
+
     if (this.state.phase !== 'lobby') return;
     if (partial.tasksPerPlayer) {
       this.state.tasksPerPlayer = Math.max(3, Math.min(8, Math.floor(partial.tasksPerPlayer)));
@@ -97,9 +105,6 @@ export class GameRoom {
     if (partial.impostorCount) {
       const maxImpostors = Math.max(1, Math.floor(this.state.playerOrder.length / 3));
       this.state.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(partial.impostorCount)));
-    }
-    if (partial.meetingSpot !== undefined) {
-      this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
     }
     this.touch();
   }
