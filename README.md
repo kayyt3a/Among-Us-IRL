@@ -118,6 +118,12 @@ drain, and the per-player meeting limit + cooldown. Run it the same
 way (`npm run test:pacing`) — it also takes about a minute, for the
 same reason.
 
+`scripts/proximity-test.mjs` (`npm run test:proximity`) drives the
+audio-handshake kill state machine directly — a correct tone
+confirming the kill, a mismatched tone timing out, and a missing mic
+falling back to an instant kill — without needing real microphone or
+speaker hardware.
+
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count
