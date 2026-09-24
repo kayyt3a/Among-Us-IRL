@@ -43,8 +43,20 @@ export default function Lobby() {
           {room.players.map((p) => (
             <div className="player-row" key={p.id}>
               <span>{p.name}</span>
+              {p.wins > 0 && <span className="badge">{p.wins} win{p.wins > 1 ? 's' : ''}</span>}
               {p.isHost && <span className="badge badge-host">HOST</span>}
               {p.id === game.session?.playerId && <span className="badge">YOU</span>}
+              <div className="spacer" />
+              {game.isHost && p.id !== game.session?.playerId && (
+                <>
+                  <button className="btn btn-ghost btn-sm" onClick={() => game.transferHost(p.id)}>
+                    Make host
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => game.kickPlayer(p.id)}>
+                    Kick
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

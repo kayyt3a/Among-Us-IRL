@@ -17,6 +17,7 @@
     "smoke": "node scripts/smoke-test.mjs",
     "test:pacing": "node scripts/pacing-test.mjs",
     "test:proximity": "node scripts/proximity-test.mjs",
-    "test:roles": "node scripts/roles-test.mjs"
+    "test:roles": "node scripts/roles-test.mjs",
+    "test:hostcontrols": "node scripts/hostcontrols-test.mjs"
   }
 }

@@ -84,6 +84,7 @@ export class GameRoom {
       engineerId: null,
       protectedPlayerId: null,
       gameStartedAt: null,
+      wins: new Map(),
     };
   }
 
@@ -91,7 +92,7 @@ export class GameRoom {
     this.state.lastActivity = Date.now();
   }
 
-  addPlayer(name: string, isHost: boolean): ServerPlayer {
+  addPlayer(name: string, isHost: boolean, isSpectator = false): ServerPlayer {
     const id = randomUUID();
     const player: ServerPlayer = {
       id,
@@ -107,6 +108,7 @@ export class GameRoom {
       specialRoleUsed: false,
       meetingsCalled: 0,
       killCooldownUntil: 0,
+      isSpectator,
     };
     this.state.players.set(id, player);
     this.state.playerOrder.push(id);
@@ -117,7 +119,7 @@ export class GameRoom {
   get alivePlayers(): ServerPlayer[] {
     return this.state.playerOrder
       .map((id) => this.state.players.get(id)!)
-      .filter((p) => p.status === 'alive');
+      .filter((p) => p.status === 'alive' && !p.isSpectator);
   }
 
   get aliveImpostors(): ServerPlayer[] {
@@ -488,13 +490,14 @@ export class GameRoom {
     if (!this.isGameClockExpired()) return null;
     this.state.winner = 'impostors';
     this.state.phase = 'ended';
+    this.recordWin('impostors');
     this.touch();
     return this.gameOverInfo('impostors');
   }
 
   callMeeting(callerId: string, reason: MeetingReason): { ok: true; meeting: MeetingState } | { ok: false; error: string } {
     const caller = this.state.players.get(callerId);
-    if (!caller || caller.status !== 'alive') {
+    if (!caller || caller.status !== 'alive' || caller.isSpectator) {
       return { ok: false, error: 'Only living players can call a meeting.' };
     }
     if (this.state.phase !== 'playing') {
@@ -533,7 +536,7 @@ export class GameRoom {
   castVote(voterId: string, targetId: string): boolean {
     if (!this.state.meeting || this.state.meeting.phase !== 'voting') return false;
     const voter = this.state.players.get(voterId);
-    if (!voter || voter.status !== 'alive') return false;
+    if (!voter || voter.status !== 'alive' || voter.isSpectator) return false;
     if (targetId !== 'skip' && !this.state.players.get(targetId)) return false;
     this.state.meeting.votes.set(voterId, targetId);
     this.touch();
@@ -742,7 +745,20 @@ export class GameRoom {
     this.touch();
   }
 
+  /** Credits a win to every player on the winning side, dead or alive — same as real Among Us. */
+  private recordWin(winner: 'crewmates' | 'impostors') {
+    for (const id of this.state.playerOrder) {
+      const p = this.state.players.get(id)!;
+      const onWinningSide =
+        (winner === 'crewmates' && p.role === 'crewmate') || (winner === 'impostors' && p.role === 'impostor');
+      if (onWinningSide) {
+        this.state.wins.set(id, (this.state.wins.get(id) ?? 0) + 1);
+      }
+    }
+  }
+
   checkWinConditions(): GameOverInfo | null {
+    if (this.state.winner) return null;
     const impostorsAlive = this.aliveImpostors.length;
     const crewmatesAlive = this.aliveCrewmates.length;
 
@@ -766,21 +782,20 @@ export class GameRoom {
 
     this.state.winner = winner;
     this.state.phase = 'ended';
+    this.recordWin(winner);
     return this.gameOverInfo(winner);
   }
 
   gameOverInfo(winner: 'crewmates' | 'impostors'): GameOverInfo {
-    const allCrew = this.allCrewmates;
-    const tasksCompleted = allCrew.reduce((sum, p) => sum + p.tasks.filter((t) => t.done).length, 0);
-    const tasksTotal = allCrew.reduce((sum, p) => sum + p.tasks.length, 0);
+    const { done, total } = this.crewTaskProgress();
     return {
       winner,
       players: this.state.playerOrder.map((id) => {
         const p = this.state.players.get(id)!;
         return { id: p.id, name: p.name, role: p.role ?? 'crewmate', status: p.status };
       }),
-      tasksCompleted,
-      tasksTotal,
+      tasksCompleted: done,
+      tasksTotal: total,
       durationMs: this.state.gameStartedAt ? Date.now() - this.state.gameStartedAt : 0,
     };
   }
@@ -795,6 +810,8 @@ export class GameRoom {
       p.specialRoleUsed = false;
       p.meetingsCalled = 0;
       p.killCooldownUntil = 0;
+      // Anyone who joined mid-round as a spectator is a full player from here on.
+      p.isSpectator = false;
     }
     this.state.phase = 'lobby';
     this.state.meeting = null;
@@ -812,6 +829,37 @@ export class GameRoom {
     this.state.protectedPlayerId = null;
     this.state.gameStartedAt = null;
     this.touch();
+  }
+
+  /** Host-only, lobby-only: removes a player from the room outright. */
+  kickPlayer(hostId: string, targetId: string): { ok: true; socketId: string | null } | { ok: false; error: string } {
+    const host = this.state.players.get(hostId);
+    if (!host?.isHost) return { ok: false, error: 'Only the host can do that.' };
+    if (this.state.phase !== 'lobby') return { ok: false, error: 'Can only remove players in the lobby.' };
+    if (targetId === hostId) return { ok: false, error: "You can't remove yourself — leave instead." };
+    const target = this.state.players.get(targetId);
+    if (!target) return { ok: false, error: 'Player not found.' };
+
+    const socketId = target.socketId;
+    this.state.players.delete(targetId);
+    this.state.playerOrder = this.state.playerOrder.filter((id) => id !== targetId);
+    this.state.wins.delete(targetId);
+    this.touch();
+    return { ok: true, socketId };
+  }
+
+  /** Host-only: hands host powers to another connected player, at any phase. */
+  transferHost(hostId: string, targetId: string): { ok: true } | { ok: false; error: string } {
+    const host = this.state.players.get(hostId);
+    if (!host?.isHost) return { ok: false, error: 'Only the host can do that.' };
+    if (targetId === hostId) return { ok: false, error: "You're already the host." };
+    const target = this.state.players.get(targetId);
+    if (!target || !target.connected) return { ok: false, error: 'Player not found.' };
+
+    host.isHost = false;
+    target.isHost = true;
+    this.touch();
+    return { ok: true };
   }
 
   removePlayer(playerId: string) {
@@ -869,11 +917,23 @@ export class GameRoom {
           // at the roster can't out who died; it's only revealed once a meeting is called.
           status:
             this.state.phase === 'meeting' || this.state.phase === 'ended' ? p.status : 'alive',
+          isSpectator: p.isSpectator,
+          wins: this.state.wins.get(p.id) ?? 0,
         })),
       meeting: this.publicMeeting(),
       ventAvailable: this.isVentAvailable(),
       ventEndsAt: this.state.ventAvailableUntil || null,
       gameEndsAt: this.state.gameEndsAt,
+      crewTaskProgress: this.crewTaskProgress(),
+    };
+  }
+
+  /** Aggregate crew task completion — same info the classic Among Us task bar shows everyone. */
+  private crewTaskProgress(): { done: number; total: number } {
+    const allCrew = this.allCrewmates;
+    return {
+      done: allCrew.reduce((sum, p) => sum + p.tasks.filter((t) => t.done).length, 0),
+      total: allCrew.reduce((sum, p) => sum + p.tasks.length, 0),
     };
   }
 }

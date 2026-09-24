@@ -1,0 +1,21 @@
+# Starter config for deploying to Fly.io. `flyctl launch` will offer to
+# generate/overwrite this with your app name filled in — that's fine, just
+# keep the [http_service] section pointing at internal_port 4000.
+app = "irl-impostor" # flyctl launch will ask you to pick a unique name
+
+[build]
+
+[env]
+  PORT = "4000"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256

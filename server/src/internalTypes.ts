@@ -27,6 +27,8 @@ export interface ServerPlayer {
   meetingsCalled: number;
   /** Set after a kill; this player (as killer) can't attempt another until then. */
   killCooldownUntil: number;
+  /** Joined mid-round — watching this round, becomes a normal player again next round. */
+  isSpectator: boolean;
 }
 
 export interface PendingKillAttempt {
@@ -79,4 +81,6 @@ export interface GameRoomState {
   protectedPlayerId: string | null;
   /** When the current match started, for the end-of-game duration stat. */
   gameStartedAt: number | null;
+  /** Rounds won per player id, persisted across resetToLobby for the life of the room. */
+  wins: Map<string, number>;
 }

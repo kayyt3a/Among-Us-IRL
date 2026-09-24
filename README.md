@@ -26,7 +26,11 @@ play — no accounts, no app install, no QR codes or Bluetooth.
    being called, dying, a sabotage landing, and the game ending all buzz
    the device, plus a one-time warning when the game clock drops under a
    minute.
-7. The impostor eliminates nearby players by tapping **Eliminate** and
+7. Everyone can see a shared **crew task progress bar** — same info the
+   classic Among Us task bar gives, useful for the crew to gauge urgency
+   and for the impostor to bluff and time sabotage without it ever
+   revealing who personally is behind.
+8. The impostor eliminates nearby players by tapping **Eliminate** and
    picking a target. Proximity is verified with an audio handshake: the
    impostor's phone plays a short near-ultrasonic tone (Web Audio), and
    the target's phone silently listens for it via the mic (`getUserMedia`
@@ -37,21 +41,21 @@ play — no accounts, no app install, no QR codes or Bluetooth.
    noise, a cheap speaker, a locked screen), it falls back to an
    honor-code "Eliminate anyway" button so a bad mic can never soft-lock
    a kill.
-8. After a kill, the impostor has a short window to trigger **Vent** — a
+9. After a kill, the impostor has a short window to trigger **Vent** — a
    full-screen blackout broadcast to every device at once, so no one can
    use screen state to tell who's alive, dead, or the impostor.
-9. Before starting, the host sets a **meeting spot** — a real place in
-   the house (the couch, the kitchen table). Anyone can **call a
-   meeting** at any time; every device shows "Everyone return to
-   [meeting spot]" plus a synced discussion timer and a vote, and the
-   most-voted player is eliminated.
-10. A shared **game clock** (20 minutes by default) runs the whole
+10. Before starting, the host sets a **meeting spot** — a real place in
+    the house (the couch, the kitchen table). Anyone can **call a
+    meeting** at any time; every device shows "Everyone return to
+    [meeting spot]" plus a synced discussion timer and a vote, and the
+    most-voted player is eliminated.
+11. A shared **game clock** (20 minutes by default) runs the whole
     match — if it hits zero, the impostors win by default. The
     impostor has a handful of **sabotage** charges that each cut a
     chunk off the clock (with a cooldown between uses, so it can't be
     spammed) — no reactor/O2 stations to physically go stand at, just
     pressure everyone can see ticking down.
-11. Four optional roles, toggled by the host before starting: the
+12. Four optional roles, toggled by the host before starting: the
     **Judge** can force-eject anyone once during a vote — get it
     wrong and the Judge is ejected instead; the **Guardian Angel**,
     once they've died, can shield one living player from the next
@@ -59,12 +63,18 @@ play — no accounts, no app install, no QR codes or Bluetooth.
     during play — an innocent guess eliminates the Sheriff instead;
     the **Engineer** can trigger a decoy blackout vent once, to throw
     suspicion around even though they're not the impostor.
-12. The game ends when all impostors are caught, the impostors
+13. The game ends when all impostors are caught, the impostors
     outnumber (or equal) the remaining crewmates, every crewmate's
     tasks are done (ghosts keep working their list — an unfinished
     one still blocks the win), or the clock runs out. The end screen
     recaps how many tasks got done and how long the match ran, next
-    to the final roles.
+    to the final roles — and every player's win tally for the session
+    so far, since a room keeps score across rounds.
+14. Anyone who joins after a round has already started comes in as a
+    **spectator** for that round (they can watch, but not vote, call
+    meetings, or get a role) and plays normally from the next round on.
+    The host can also kick a player or hand host powers to someone else
+    from the lobby.
 
 ## Tech stack
 
@@ -107,6 +117,36 @@ The server serves the built client as static files from `client/dist`,
 so a single deployed process (e.g. on Fly.io, Render, or a Raspberry Pi
 on the house Wi-Fi) is enough to host a game for everyone in the room.
 
+### Deploying
+
+There's a `Dockerfile` at the repo root — it's a single-stage image that
+just runs the same `npm install && npm run build` and
+`npm --workspace server start` as above inside a `node:20-slim`
+container, so anywhere that can run a container can host a game:
+
+```bash
+docker build -t irl-impostor .
+docker run -p 4000:4000 irl-impostor
+```
+
+**Fly.io** is the easiest path if you don't already have a host — free
+tier, one binary, no server to maintain. There's a starter `fly.toml` at
+the repo root:
+
+```bash
+brew install flyctl   # or see fly.io/docs/hands-on/install-flyctl
+fly auth login
+fly launch            # detects fly.toml and the Dockerfile; pick a unique app name
+fly deploy
+```
+
+Whatever you deploy to, set `CLIENT_ORIGIN` to your app's URL if you
+ever split the client off to a different origin (not needed for the
+default single-process setup, where the server serves the client
+itself). Since game state lives in memory, a redeploy or restart clears
+any rooms in progress — fine for a game night, not meant to run
+unattended for days.
+
 ### Smoke test
 
 `scripts/smoke-test.mjs` drives a full game end-to-end over real
@@ -141,6 +181,12 @@ getting mixed into the assignment pool, the Engineer's decoy vent
 landing on the real impostor and misfiring on an innocent crewmate
 (which eliminates the Sheriff instead). It's fast — no long waits.
 
+`scripts/hostcontrols-test.mjs` (`npm run test:hostcontrols`) covers
+the host kicking a player from the lobby, transferring host mid-game,
+a late joiner landing as a spectator (can't vote or call meetings, no
+role for that round, becomes a normal player next round), and win
+tallies accumulating correctly across two rounds in the same room.
+
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count
@@ -155,12 +201,15 @@ sabotage charges/cooldown/penalty, room idle cleanup — lives in
 
 Implemented: room creation/join, secret role + unique task assignment
 (plus a shared common task, visual-task tagging, and host-defined
-custom tasks), kill + blackout vent, a shared game clock with scarce
-sabotage charges, meetings with a synced timer and vote, four optional
-roles (Judge, Guardian Angel, Sheriff, Engineer), sound + haptic
-feedback for the game's key moments, an end-of-game recap (tasks done,
-match length, final roles), win conditions, reconnect-on-refresh, and
-a PWA manifest so the app can be added to a phone's home screen.
+custom tasks), a live shared task-progress bar, kill + blackout vent,
+a shared game clock with scarce sabotage charges, meetings with a
+synced timer and vote, four optional roles (Judge, Guardian Angel,
+Sheriff, Engineer), sound + haptic feedback for the game's key
+moments, an end-of-game recap (tasks done, match length, final roles,
+win tallies), a persistent per-room scoreboard across rounds, host
+controls (kick, transfer host), mid-round joiners as spectators, win
+conditions, reconnect-on-refresh, a PWA manifest, and a Dockerfile +
+`fly.toml` for deploying it somewhere reachable.
 
 Not implemented yet (see the project spec for the full list): ads,
 accounts, themed/preset task packs beyond free-typed custom tasks.

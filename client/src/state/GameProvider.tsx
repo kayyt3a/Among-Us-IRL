@@ -84,7 +84,8 @@ type Action =
   | { type: 'kill_attempt_failed'; reason: string }
   | { type: 'kill_attempt_cancel' }
   | { type: 'sabotage_status'; usesRemaining: number; availableAt: number }
-  | { type: 'special_role_used' };
+  | { type: 'special_role_used' }
+  | { type: 'kicked' };
 
 const initialState: State = {
   connected: false,
@@ -166,6 +167,24 @@ function reducer(state: State, action: Action): State {
       return { ...state, sabotageUsesRemaining: action.usesRemaining, sabotageAvailableAt: action.availableAt };
     case 'special_role_used':
       return { ...state, specialRoleUsed: true };
+    case 'kicked':
+      return {
+        ...state,
+        session: null,
+        room: null,
+        myRole: null,
+        myTasks: [],
+        fellowImpostors: [],
+        dead: false,
+        meetingResult: null,
+        gameOver: null,
+        killAttempt: idleKillAttempt,
+        mySpecialRole: null,
+        specialRoleUsed: false,
+        sabotageUsesRemaining: 0,
+        sabotageAvailableAt: 0,
+        error: 'You were removed from the room by the host.',
+      };
     case 'kill_attempt_start':
       return {
         ...state,
@@ -193,6 +212,8 @@ interface GameApi extends State {
   leaveGame: () => void;
   updateSettings: (partial: Partial<RoomSettings>) => void;
   startGame: () => void;
+  kickPlayer: (targetId: string) => void;
+  transferHost: (targetId: string) => void;
   completeTask: (taskId: string) => void;
   /** Honor-code instant kill, no proximity check — the manual fallback. */
   killPlayer: (targetId: string) => void;
@@ -292,6 +313,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     function onAbilityResult(payload: { ok: boolean; message?: string }) {
       if (payload.message) dispatch({ type: 'error', message: payload.message });
     }
+    function onKicked() {
+      localStorage.removeItem(STORAGE_KEY);
+      dispatch({ type: 'kicked' });
+    }
     function onKillListenStart(payload: { frequencyHz: number; windowMs: number }) {
       killToneStopRef.current?.();
       killToneStopRef.current = playProximityTone(payload.frequencyHz, payload.windowMs);
@@ -343,6 +368,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('sabotage_triggered', onSabotageTriggered);
     socket.on('guardian_protection_used', onGuardianProtectionUsed);
     socket.on('ability_result', onAbilityResult);
+    socket.on('kicked', onKicked);
 
     if (socket.connected) onConnect();
 
@@ -366,6 +392,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('sabotage_triggered', onSabotageTriggered);
       socket.off('guardian_protection_used', onGuardianProtectionUsed);
       socket.off('ability_result', onAbilityResult);
+      socket.off('kicked', onKicked);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -429,6 +456,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
       updateSettings: (partial) => socket.emit('update_settings', partial),
       startGame: () => socket.emit('start_game'),
+      kickPlayer: (targetId: string) => socket.emit('kick_player', { targetId }),
+      transferHost: (targetId: string) => socket.emit('transfer_host', { targetId }),
       completeTask: (taskId: string) => {
         dispatch({ type: 'task_local_done', taskId });
         socket.emit('complete_task', { taskId });

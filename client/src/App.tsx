@@ -5,6 +5,7 @@ import Lobby from './screens/Lobby';
 import Game from './screens/Game';
 import Meeting from './screens/Meeting';
 import GameOver from './screens/GameOver';
+import Spectator from './screens/Spectator';
 import BlackoutOverlay from './components/BlackoutOverlay';
 import Toast from './components/Toast';
 import MeetingResultOverlay from './components/MeetingResultOverlay';
@@ -25,6 +26,8 @@ export default function App() {
     screen = <GameOver />;
   } else if (game.room.phase === 'lobby') {
     screen = <Lobby />;
+  } else if (game.me?.isSpectator) {
+    screen = <Spectator />;
   } else if (game.room.phase === 'meeting') {
     screen = <Meeting />;
   } else {

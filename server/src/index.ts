@@ -190,15 +190,15 @@ io.on('connection', (socket) => {
   socket.on('join_room', ({ code, name }, cb) => {
     const room = rooms.get((code || '').toUpperCase());
     if (!room) return cb({ ok: false, error: 'Room not found.' });
-    if (room.state.phase !== 'lobby') {
-      return cb({ ok: false, error: 'Game already in progress.' });
-    }
     if (room.state.playerOrder.length >= MAX_PLAYERS) {
       return cb({ ok: false, error: 'Room is full.' });
     }
     if (!name || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
 
-    const player = room.addPlayer(name, false);
+    // Joining mid-round means watching this round as a spectator — they
+    // become a full player automatically from the next round on.
+    const isSpectator = room.state.phase !== 'lobby';
+    const player = room.addPlayer(name, false, isSpectator);
     player.socketId = socket.id;
     socketMeta.set(socket.id, { code: room.state.code, playerId: player.id });
     socket.join(room.state.code);
@@ -277,6 +277,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = ctx;
     if (room.completeTask(playerId, taskId)) {
       socket.emit('task_ack', { taskId });
+      broadcastRoomUpdate(room);
       const winner = room.checkWinConditions();
       if (winner) {
         clearGameClockTimer(room.state.code);
@@ -454,6 +455,38 @@ io.on('connection', (socket) => {
       socket.emit('error_message', { message: res.error });
       return;
     }
+  });
+
+  socket.on('kick_player', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.kickPlayer(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    if (res.socketId) {
+      const targetSocket = io.sockets.sockets.get(res.socketId);
+      if (targetSocket) {
+        targetSocket.emit('kicked');
+        socketMeta.delete(targetSocket.id);
+        targetSocket.leave(room.state.code);
+      }
+    }
+    broadcastRoomUpdate(room);
+  });
+
+  socket.on('transfer_host', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.transferHost(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    broadcastRoomUpdate(room);
   });
 
   socket.on('sheriff_shoot', ({ targetId }) => {

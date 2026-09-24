@@ -73,6 +73,38 @@ export default function Game() {
         </div>
       )}
 
+      {room.crewTaskProgress.total > 0 && (
+        <div className="card stack-sm" style={{ padding: 12, gap: 6 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="subtitle" style={{ margin: 0 }}>
+              Crew tasks
+            </span>
+            <div className="spacer" />
+            <span className="subtitle" style={{ margin: 0 }}>
+              {room.crewTaskProgress.done}/{room.crewTaskProgress.total}
+            </span>
+          </div>
+          <div
+            style={{
+              height: 8,
+              borderRadius: 999,
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.round((room.crewTaskProgress.done / room.crewTaskProgress.total) * 100)}%`,
+                background: 'var(--good)',
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {game.dead ? (
         <div className="card center">
           <h2>👻 You are a ghost</h2>

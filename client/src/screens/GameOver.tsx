@@ -45,16 +45,20 @@ export default function GameOver() {
 
       <div className="card stack">
         <h3>Final roles</h3>
-        {info.players.map((p) => (
-          <div className="player-row" key={p.id}>
-            <span>{p.name}</span>
-            <div className="spacer" />
-            {p.status === 'dead' && <span className="badge badge-dead">GHOST</span>}
-            <span className={`badge ${p.role === 'impostor' ? 'badge-host' : ''}`}>
-              {p.role === 'impostor' ? 'Impostor' : 'Crewmate'}
-            </span>
-          </div>
-        ))}
+        {info.players.map((p) => {
+          const wins = game.room?.players.find((rp) => rp.id === p.id)?.wins ?? 0;
+          return (
+            <div className="player-row" key={p.id}>
+              <span>{p.name}</span>
+              <div className="spacer" />
+              {wins > 0 && <span className="badge">{wins} win{wins > 1 ? 's' : ''}</span>}
+              {p.status === 'dead' && <span className="badge badge-dead">GHOST</span>}
+              <span className={`badge ${p.role === 'impostor' ? 'badge-host' : ''}`}>
+                {p.role === 'impostor' ? 'Impostor' : 'Crewmate'}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       <div className="spacer" />

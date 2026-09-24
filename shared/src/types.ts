@@ -39,6 +39,10 @@ export interface PublicPlayer {
   isHost: boolean;
   /** Only meaningful once game has ended or player is revealed. */
   status: PlayerStatus;
+  /** Joined mid-round — watching this round, will play from the next one. */
+  isSpectator: boolean;
+  /** Rounds this player has won in this room, across the whole session. */
+  wins: number;
 }
 
 /** Private payload sent only to the owning player's socket. */
@@ -116,6 +120,8 @@ export interface RoomStateSummary {
   ventEndsAt: number | null;
   /** The shared game clock — when it runs out, the impostors win by default. Null before the game starts. */
   gameEndsAt: number | null;
+  /** Aggregate crew task completion, visible to everyone (including the impostor) — same info the classic task bar gives. */
+  crewTaskProgress: { done: number; total: number };
 }
 
 // ---- Socket.IO event payloads ----
@@ -149,6 +155,8 @@ export interface ServerToClientEvents {
   guardian_protection_used: () => void;
   /** Result of a Sheriff shot or an Engineer's fake vent, sent only to the player who used it. */
   ability_result: (payload: { ok: boolean; message?: string }) => void;
+  /** Sent only to a player the host just removed from the room. */
+  kicked: () => void;
 }
 
 export interface ClientToServerEvents {
@@ -189,4 +197,8 @@ export interface ClientToServerEvents {
   sheriff_shoot: (payload: { targetId: string }) => void;
   /** The Engineer's one-time decoy blackout vent. */
   engineer_vent: () => void;
+  /** Host-only: removes a player from the room. Lobby only. */
+  kick_player: (payload: { targetId: string }) => void;
+  /** Host-only: hands host powers to another connected player. */
+  transfer_host: (payload: { targetId: string }) => void;
 }
