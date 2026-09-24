@@ -19,8 +19,13 @@ export const MEETING_COOLDOWN_MS = 20_000; // how long after a meeting ends befo
 // The shared game clock: crew must finish tasks / catch the impostors before
 // it runs out, or the impostors win by default. Sabotage cuts it down.
 export const GAME_DURATION_MS = 20 * 60 * 1000;
-export const SABOTAGE_TIME_PENALTY_MS = 15_000;
 export const SABOTAGE_MAX_USES = 3;
+// Cooldown starts once a sabotage is solved (stopped), not when it's triggered.
 export const SABOTAGE_COOLDOWN_MS = 45_000;
+// While a sabotage puzzle is unsolved, the clock drains at this many extra
+// seconds per real second, on top of the normal 1x tick — 0.5 extra makes the
+// total drain rate 1.5x. Applied in small ticks so every client watches it happen live.
+export const SABOTAGE_EXTRA_DRAIN_RATE = 0.5;
+export const SABOTAGE_DRAIN_TICK_MS = 500;
 
 export const ROOM_IDLE_CLEANUP_MS = 4 * 60 * 60 * 1000; // sweep rooms idle for 4h

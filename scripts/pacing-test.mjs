@@ -1,4 +1,10 @@
 import { io } from 'socket.io-client';
+import { SABOTAGE_WORDS } from '@irl-impostor/shared';
+
+function solveScrambled(scrambled) {
+  const key = [...scrambled.toUpperCase()].sort().join('');
+  return SABOTAGE_WORDS.find((w) => [...w.toUpperCase()].sort().join('') === key);
+}
 
 const URL = 'http://localhost:4000';
 
@@ -104,20 +110,59 @@ async function testCommonTaskAndPacing() {
     'rejected: ' + protectWhileAliveResult.message
   );
 
-  console.log('--- Sabotage: charges + cooldown + clock drain ---');
+  console.log('--- Sabotage: unscramble puzzle + accelerated drain + cooldown ---');
   const beforeClock = g.room.gameEndsAt;
   assert(typeof beforeClock === 'number', 'game clock is running after start');
   const sabotageOkPromise = waitFor(sockets[impostorIdx], 'sabotage_triggered');
   sockets[impostorIdx].emit('trigger_sabotage');
   await sabotageOkPromise;
   await wait(150);
-  assert(beforeClock - g.room.gameEndsAt === 15000, 'clock cut by exactly the configured penalty (15000ms)');
+  assert(!!g.room.sabotagePuzzle, 'a sabotage puzzle is now active');
+  assert(g.room.sabotagePuzzle.scrambled.length === 2, 'puzzle has two scrambled words');
+  assert(g.room.sabotagePuzzle.solved.every((s) => s === false), 'neither word is solved yet');
+
+  const againWhileActive = await new Promise((resolve) => {
+    sockets[impostorIdx].once('error_message', resolve);
+    sockets[impostorIdx].emit('trigger_sabotage');
+  });
+  assert(
+    /already in progress/i.test(againWhileActive.message),
+    're-triggering while active is rejected: ' + againWhileActive.message
+  );
+
+  console.log('--- letting the accelerated drain run for ~2s before solving ---');
+  const triggerMoment = Date.now();
+  const remainingAtTrigger = g.room.gameEndsAt - triggerMoment;
+  await wait(2000);
+  const now = Date.now();
+  const remainingNow = g.room.gameEndsAt - now;
+  const drainRate = (remainingAtTrigger - remainingNow) / (now - triggerMoment);
+  // Should be ~1.5x (1x normal passage + the 0.5x extra sabotage drain); slack for the
+  // 500ms tick granularity and test jitter.
+  assert(drainRate > 1.3 && drainRate < 1.7, `remaining time drained at ~1.5x while unsolved (got ${drainRate.toFixed(2)}x)`);
+
+  console.log('--- solving both scrambled words ---');
+  const word0 = solveScrambled(g.room.sabotagePuzzle.scrambled[0]);
+  const word1 = solveScrambled(g.room.sabotagePuzzle.scrambled[1]);
+  assert(!!word0 && !!word1, 'both scrambled words resolve back to a known word');
+
+  const wrongGuess = await new Promise((resolve) => sockets[0].emit('submit_unscramble', { wordIndex: 0, guess: 'notaword' }, resolve));
+  assert(wrongGuess.ok === false, 'a wrong guess is rejected');
+
+  const stoppedPromise = waitFor(sockets[0], 'sabotage_stopped');
+  const solve0 = await new Promise((resolve) => sockets[0].emit('submit_unscramble', { wordIndex: 0, guess: word0 }, resolve));
+  assert(solve0.ok === true, 'first word solved');
+  const solve1 = await new Promise((resolve) => sockets[1].emit('submit_unscramble', { wordIndex: 1, guess: word1 }, resolve));
+  assert(solve1.ok === true, 'second word solved by a different player');
+  await stoppedPromise;
+  await wait(150);
+  assert(g.room.sabotagePuzzle === null, 'puzzle cleared once both words are solved');
 
   const sabotageAgainResult = await new Promise((resolve) => {
     sockets[impostorIdx].once('error_message', resolve);
     sockets[impostorIdx].emit('trigger_sabotage');
   });
-  assert(/cooldown/i.test(sabotageAgainResult.message), 'second immediate sabotage rejected: ' + sabotageAgainResult.message);
+  assert(/cooldown/i.test(sabotageAgainResult.message), 'immediate re-trigger after solving is blocked by cooldown: ' + sabotageAgainResult.message);
 
   console.log('--- Meeting per-player limit (resolves the meeting first, ~60s) ---');
   const callerIdx = crewIdxs.find((i) => i !== gaIdx && i !== victim1 && i !== victim2);

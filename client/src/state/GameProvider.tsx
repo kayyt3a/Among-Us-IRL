@@ -18,6 +18,8 @@ import {
   alertGameOver,
   alertMeetingCalled,
   alertSabotage,
+  alertSabotageStopped,
+  alertSabotageWordSolved,
   alertVent,
   alertYouDied,
   bumpKillConfirmed,
@@ -222,6 +224,7 @@ interface GameApi extends State {
   cancelKillAttempt: () => void;
   triggerVent: () => void;
   triggerSabotage: () => void;
+  submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) => Promise<boolean>;
   judgeOverrule: (targetId: string) => void;
   guardianProtect: (targetId: string) => void;
   sheriffShoot: (targetId: string) => void;
@@ -343,7 +346,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     function onSabotageTriggered() {
       alertSabotage();
-      dispatch({ type: 'error', message: '⚠ Sabotage! The clock just got cut.' });
+      dispatch({ type: 'error', message: '⚠ Sabotage! Unscramble both words to stop it.' });
+    }
+    function onSabotageWordSolved() {
+      alertSabotageWordSolved();
+    }
+    function onSabotageStopped() {
+      alertSabotageStopped();
     }
     function onGuardianProtectionUsed() {
       dispatch({ type: 'error', message: 'Your shield saved someone from elimination.' });
@@ -366,6 +375,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('begin_proximity_scan', onBeginProximityScan);
     socket.on('sabotage_status', onSabotageStatus);
     socket.on('sabotage_triggered', onSabotageTriggered);
+    socket.on('sabotage_word_solved', onSabotageWordSolved);
+    socket.on('sabotage_stopped', onSabotageStopped);
     socket.on('guardian_protection_used', onGuardianProtectionUsed);
     socket.on('ability_result', onAbilityResult);
     socket.on('kicked', onKicked);
@@ -390,6 +401,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('begin_proximity_scan', onBeginProximityScan);
       socket.off('sabotage_status', onSabotageStatus);
       socket.off('sabotage_triggered', onSabotageTriggered);
+      socket.off('sabotage_word_solved', onSabotageWordSolved);
+      socket.off('sabotage_stopped', onSabotageStopped);
       socket.off('guardian_protection_used', onGuardianProtectionUsed);
       socket.off('ability_result', onAbilityResult);
       socket.off('kicked', onKicked);
@@ -475,6 +488,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
       triggerVent: () => socket.emit('trigger_vent'),
       triggerSabotage: () => socket.emit('trigger_sabotage'),
+      submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) =>
+        new Promise<boolean>((resolve) => {
+          socket.emit('submit_unscramble', { wordIndex, guess }, (res) => resolve(res.ok));
+        }),
       judgeOverrule: (targetId: string) => {
         dispatch({ type: 'special_role_used' });
         socket.emit('judge_overrule', { targetId });

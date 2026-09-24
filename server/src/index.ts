@@ -7,7 +7,7 @@ import type { ClientToServerEvents, PrivateGameInfo, ServerToClientEvents } from
 import { PROXIMITY_FREQUENCIES_HZ } from '@irl-impostor/shared';
 import { GameRoom } from './gameRoom';
 import { generateRoomCode } from './roomCode';
-import { MAX_PLAYERS, ROOM_IDLE_CLEANUP_MS, VENT_DURATION_MS } from './constants';
+import { MAX_PLAYERS, ROOM_IDLE_CLEANUP_MS, SABOTAGE_DRAIN_TICK_MS, VENT_DURATION_MS } from './constants';
 import type { ServerPlayer } from './internalTypes';
 
 const PORT = Number(process.env.PORT) || 4000;
@@ -40,6 +40,7 @@ const socketMeta = new Map<string, SocketMeta>();
 const meetingTimers = new Map<string, ReturnType<typeof setTimeout>[]>();
 const killAttemptTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const gameClockTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const sabotageDrainTimers = new Map<string, ReturnType<typeof setInterval>>();
 
 function clearMeetingTimers(code: string) {
   const timers = meetingTimers.get(code);
@@ -62,6 +63,14 @@ function clearGameClockTimer(code: string) {
   if (timer) {
     clearTimeout(timer);
     gameClockTimers.delete(code);
+  }
+}
+
+function clearSabotageDrainTimer(code: string) {
+  const timer = sabotageDrainTimers.get(code);
+  if (timer) {
+    clearInterval(timer);
+    sabotageDrainTimers.delete(code);
   }
 }
 
@@ -99,6 +108,40 @@ function scheduleGameClock(room: GameRoom) {
     }
   }, Math.max(0, room.state.gameEndsAt - Date.now()));
   gameClockTimers.set(code, timer);
+}
+
+/**
+ * While a sabotage puzzle is unsolved, ticks the accelerated clock drain and
+ * rebroadcasts the room so every screen visibly counts down faster. Stops
+ * itself the moment the puzzle clears or the round is no longer playing —
+ * callers don't need to remember to clear it on every win path.
+ */
+function startSabotageDrainTimer(room: GameRoom) {
+  const code = room.state.code;
+  clearSabotageDrainTimer(code);
+  let lastTick = Date.now();
+  const timer = setInterval(() => {
+    // Keeps draining through a meeting (extra pressure to hurry up and vote) —
+    // only actually stops once the puzzle's solved or the round has ended outright.
+    if (!room.state.sabotagePuzzle || room.state.phase === 'ended') {
+      clearSabotageDrainTimer(code);
+      return;
+    }
+    const now = Date.now();
+    const elapsed = now - lastTick;
+    lastTick = now;
+    room.applySabotageDrainTick(elapsed);
+    broadcastRoomUpdate(room);
+    if (room.isGameClockExpired()) {
+      clearSabotageDrainTimer(code);
+      const winner = room.expireGameClock();
+      if (winner) {
+        io.to(code).emit('game_over', winner);
+        broadcastRoomUpdate(room);
+      }
+    }
+  }, SABOTAGE_DRAIN_TICK_MS);
+  sabotageDrainTimers.set(code, timer);
 }
 
 function finishMeeting(
@@ -412,10 +455,29 @@ io.on('connection', (socket) => {
       socket.emit('error_message', { message: res.error });
       return;
     }
-    scheduleGameClock(room);
+    // The drain timer now owns clock-expiry checks while the puzzle is up.
+    clearGameClockTimer(room.state.code);
+    startSabotageDrainTimer(room);
     io.to(room.state.code).emit('sabotage_triggered');
     broadcastRoomUpdate(room);
     sendSabotageStatus(room);
+  });
+
+  socket.on('submit_unscramble', ({ wordIndex, guess }, cb) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return cb({ ok: false });
+    const { room, playerId } = ctx;
+    const res = room.submitUnscrambleGuess(playerId, wordIndex, guess);
+    if (!res.ok) return cb({ ok: false });
+    cb({ ok: true });
+    io.to(room.state.code).emit('sabotage_word_solved', { wordIndex: res.wordIndex });
+    if (res.bothSolved) {
+      clearSabotageDrainTimer(room.state.code);
+      io.to(room.state.code).emit('sabotage_stopped');
+      scheduleGameClock(room);
+      sendSabotageStatus(room);
+    }
+    broadcastRoomUpdate(room);
   });
 
   socket.on('call_meeting', ({ reason }) => {
@@ -465,6 +527,7 @@ io.on('connection', (socket) => {
       socket.emit('error_message', { message: res.error });
       return;
     }
+    broadcastRoomUpdate(room);
   });
 
   socket.on('kick_player', ({ targetId }) => {
@@ -549,6 +612,7 @@ io.on('connection', (socket) => {
     clearMeetingTimers(room.state.code);
     clearKillAttemptTimer(room.state.code);
     clearGameClockTimer(room.state.code);
+    clearSabotageDrainTimer(room.state.code);
     room.resetToLobby();
     broadcastRoomUpdate(room);
   });
@@ -574,6 +638,7 @@ setInterval(() => {
       clearMeetingTimers(code);
       clearKillAttemptTimer(code);
       clearGameClockTimer(code);
+      clearSabotageDrainTimer(code);
       rooms.delete(code);
     }
   }

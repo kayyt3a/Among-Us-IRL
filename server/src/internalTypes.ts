@@ -75,6 +75,9 @@ export interface GameRoomState {
   gameEndsAt: number | null;
   sabotageUsesRemaining: number;
   sabotageAvailableAt: number;
+  /** The active sabotage puzzle, including the real words (never sent to clients until solved). */
+  sabotagePuzzle: { words: [string, string]; scrambled: [string, string]; solved: [boolean, boolean] } | null;
+  sabotageStartedAt: number | null;
   judgeId: string | null;
   guardianAngelId: string | null;
   sheriffId: string | null;

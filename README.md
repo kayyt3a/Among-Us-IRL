@@ -51,10 +51,13 @@ play — no accounts, no app install, no QR codes or Bluetooth.
     most-voted player is eliminated.
 11. A shared **game clock** (20 minutes by default) runs the whole
     match — if it hits zero, the impostors win by default. The
-    impostor has a handful of **sabotage** charges that each cut a
-    chunk off the clock (with a cooldown between uses, so it can't be
-    spammed) — no reactor/O2 stations to physically go stand at, just
-    pressure everyone can see ticking down.
+    impostor has a handful of **sabotage** charges (with a cooldown
+    between uses); spending one shows two scrambled words to the
+    whole room, and while they're unsolved the clock drains at 1.5x
+    speed — anyone can type guesses, and solving both words stops the
+    drain and starts the cooldown. No reactor/O2 stations to physically
+    go stand at, just a shared puzzle and real pressure everyone can
+    watch ticking down.
 12. Four optional roles, toggled by the host before starting: the
     **Judge** can force-eject anyone once during a vote — get it
     wrong and the Judge is ejected instead; the **Guardian Angel**,
@@ -125,22 +128,43 @@ on the house Wi-Fi) is enough to host a game for everyone in the room.
 There's a `Dockerfile` at the repo root — it's a single-stage image that
 just runs the same `npm install && npm run build` and
 `npm --workspace server start` as above inside a `node:20-slim`
-container, so anywhere that can run a container can host a game:
+container, so anywhere that can run a container can host a game.
 
-```bash
-docker build -t irl-impostor .
-docker run -p 4000:4000 irl-impostor
-```
+**Render** is the recommended path — no CLI needed, deploy straight
+from the GitHub repo:
 
-**Fly.io** is the easiest path if you don't already have a host — free
-tier, one binary, no server to maintain. There's a starter `fly.toml` at
-the repo root:
+1. Push this repo to your own GitHub account (or use it directly if
+   it's already there).
+2. On [render.com](https://render.com), **New > Blueprint**, point it at
+   the repo — it picks up `render.yaml` at the root and configures
+   itself (Docker runtime, health check on `/health`).
+3. Deploy. You'll get a URL like `https://irl-impostor.onrender.com`.
+
+The free tier spins the container down after a period of inactivity —
+the first request after that takes ~30s to wake it back up, which is
+fine for a casual game night but worth knowing before a live demo.
+
+No Blueprint support, or you'd rather click through the dashboard
+yourself: **New > Web Service**, connect the repo, runtime **Docker**,
+leave the Dockerfile path as `./Dockerfile`, and set a `PORT` env var
+to `10000` (Render's default) — the server already reads `PORT` from
+the environment, so nothing else to configure.
+
+**Fly.io** is a solid alternative if you'd rather use a CLI — free
+tier, one binary. There's a starter `fly.toml` at the repo root too:
 
 ```bash
 brew install flyctl   # or see fly.io/docs/hands-on/install-flyctl
 fly auth login
 fly launch            # detects fly.toml and the Dockerfile; pick a unique app name
 fly deploy
+```
+
+Or run the container yourself anywhere Docker works:
+
+```bash
+docker build -t irl-impostor .
+docker run -p 4000:4000 irl-impostor
 ```
 
 Whatever you deploy to, set `CLIENT_ORIGIN` to your app's URL if you
@@ -167,10 +191,12 @@ discussion timer.
 
 `scripts/pacing-test.mjs` covers the newer mechanics specifically:
 common-task assignment, the per-killer kill cooldown, the Guardian
-Angel shield blocking a kill, sabotage's charge count/cooldown/clock
-drain, and the per-player meeting limit + cooldown. Run it the same
-way (`npm run test:pacing`) — it also takes about a minute, for the
-same reason.
+Angel shield blocking a kill, the sabotage unscramble puzzle (charge
+count, the ~1.5x accelerated clock drain while unsolved, solving it
+with two different players, and the cooldown afterward), and the
+per-player meeting limit + cooldown. Run it the same way
+(`npm run test:pacing`) — it also takes about a minute, for the same
+reason.
 
 `scripts/proximity-test.mjs` (`npm run test:proximity`) drives the
 audio-handshake kill state machine directly — a correct tone
@@ -207,8 +233,8 @@ lives in `server/src/constants.ts`.
 Implemented: room creation/join, secret role + unique task assignment
 (plus a shared common task, visual-task tagging, and host-defined
 custom tasks), a live shared task-progress bar, kill + blackout vent,
-a shared game clock with scarce sabotage charges, meetings with a
-synced timer and vote, four optional roles (Judge, Guardian Angel,
+a shared game clock with a scarce-charge sabotage unscramble puzzle,
+meetings with a synced timer and vote, four optional roles (Judge, Guardian Angel,
 Sheriff, Engineer), sound + haptic feedback for the game's key
 moments, an end-of-game recap (tasks done, match length, final roles,
 win tallies), a persistent per-room scoreboard across rounds, host

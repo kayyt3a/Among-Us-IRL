@@ -1,0 +1,13 @@
+# Render Blueprint — lets you deploy this repo with "New > Blueprint" in the
+# Render dashboard instead of clicking through every field by hand. Builds
+# from the same Dockerfile used for local/Fly.io deploys.
+services:
+  - type: web
+    name: irl-impostor
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000

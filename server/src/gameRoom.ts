@@ -10,12 +10,14 @@ import {
   MeetingResult,
   MeetingState,
   MeetingVoteTally,
+  pickTwoSabotageWords,
   PlayerRole,
   PlayerTask,
   PROXIMITY_FREQUENCIES_HZ,
   PROXIMITY_WINDOW_MS,
   RoomSettings,
   RoomStateSummary,
+  scrambleWord,
   SpecialRole,
 } from '@irl-impostor/shared';
 import {
@@ -28,8 +30,8 @@ import {
   MEETING_VOTING_MS,
   MIN_PLAYERS,
   SABOTAGE_COOLDOWN_MS,
+  SABOTAGE_EXTRA_DRAIN_RATE,
   SABOTAGE_MAX_USES,
-  SABOTAGE_TIME_PENALTY_MS,
   VENT_WINDOW_MS,
 } from './constants';
 import { GameRoomState, ServerPlayer } from './internalTypes';
@@ -79,6 +81,8 @@ export class GameRoom {
       gameEndsAt: null,
       sabotageUsesRemaining: SABOTAGE_MAX_USES,
       sabotageAvailableAt: 0,
+      sabotagePuzzle: null,
+      sabotageStartedAt: null,
       judgeId: null,
       guardianAngelId: null,
       sheriffId: null,
@@ -289,6 +293,8 @@ export class GameRoom {
     this.state.gameEndsAt = now + GAME_DURATION_MS;
     this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
     this.state.sabotageAvailableAt = 0;
+    this.state.sabotagePuzzle = null;
+    this.state.sabotageStartedAt = null;
     this.touch();
     return result;
   }
@@ -453,11 +459,15 @@ export class GameRoom {
     return true;
   }
 
-  /** Spends a sabotage charge to cut the shared game clock down. */
+  /**
+   * Spends a sabotage charge to start the unscramble minigame: two scrambled
+   * words the whole room can see. While either stays unsolved the shared
+   * clock drains at 1.5x — solving both stops it and starts the cooldown.
+   */
   triggerSabotage(
     playerId: string
   ):
-    | { ok: true; gameEndsAt: number; usesRemaining: number; availableAt: number }
+    | { ok: true; scrambled: [string, string]; usesRemaining: number }
     | { ok: false; error: string } {
     const player = this.state.players.get(playerId);
     if (!player || player.role !== 'impostor' || player.status !== 'alive') {
@@ -465,6 +475,9 @@ export class GameRoom {
     }
     if (this.state.phase !== 'playing') {
       return { ok: false, error: 'Can only sabotage during play.' };
+    }
+    if (this.state.sabotagePuzzle) {
+      return { ok: false, error: 'A sabotage is already in progress.' };
     }
     if (this.state.sabotageUsesRemaining <= 0) {
       return { ok: false, error: 'No sabotage charges left.' };
@@ -476,16 +489,50 @@ export class GameRoom {
       return { ok: false, error: 'No active game clock.' };
     }
 
+    const words = pickTwoSabotageWords();
+    const scrambled: [string, string] = [scrambleWord(words[0]), scrambleWord(words[1])];
     this.state.sabotageUsesRemaining -= 1;
-    this.state.sabotageAvailableAt = Date.now() + SABOTAGE_COOLDOWN_MS;
-    this.state.gameEndsAt -= SABOTAGE_TIME_PENALTY_MS;
+    this.state.sabotagePuzzle = { words, scrambled, solved: [false, false] };
+    this.state.sabotageStartedAt = Date.now();
     this.touch();
-    return {
-      ok: true,
-      gameEndsAt: this.state.gameEndsAt,
-      usesRemaining: this.state.sabotageUsesRemaining,
-      availableAt: this.state.sabotageAvailableAt,
-    };
+    return { ok: true, scrambled, usesRemaining: this.state.sabotageUsesRemaining };
+  }
+
+  /** Applies one tick of the accelerated clock drain while a sabotage puzzle is unsolved. */
+  applySabotageDrainTick(elapsedMs: number) {
+    if (!this.state.sabotagePuzzle || this.state.gameEndsAt === null) return;
+    this.state.gameEndsAt -= elapsedMs * SABOTAGE_EXTRA_DRAIN_RATE;
+    this.touch();
+  }
+
+  /** A guess at one of the two active sabotage words. Case-insensitive. */
+  submitUnscrambleGuess(
+    playerId: string,
+    wordIndex: 0 | 1,
+    guess: string
+  ): { ok: true; wordIndex: 0 | 1; bothSolved: boolean } | { ok: false; error: string } {
+    const puzzle = this.state.sabotagePuzzle;
+    if (!puzzle) return { ok: false, error: 'No sabotage in progress.' };
+    const player = this.state.players.get(playerId);
+    if (!player || player.isSpectator) {
+      return { ok: false, error: "Spectators can't help with this." };
+    }
+    if (puzzle.solved[wordIndex]) {
+      return { ok: false, error: 'That word is already solved.' };
+    }
+    if (guess.trim().toUpperCase() !== puzzle.words[wordIndex].toUpperCase()) {
+      return { ok: false, error: 'Not quite.' };
+    }
+
+    puzzle.solved[wordIndex] = true;
+    const bothSolved = puzzle.solved[0] && puzzle.solved[1];
+    if (bothSolved) {
+      this.state.sabotagePuzzle = null;
+      this.state.sabotageStartedAt = null;
+      this.state.sabotageAvailableAt = Date.now() + SABOTAGE_COOLDOWN_MS;
+    }
+    this.touch();
+    return { ok: true, wordIndex, bothSolved };
   }
 
   isGameClockExpired(): boolean {
@@ -829,6 +876,8 @@ export class GameRoom {
     this.state.gameEndsAt = null;
     this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
     this.state.sabotageAvailableAt = 0;
+    this.state.sabotagePuzzle = null;
+    this.state.sabotageStartedAt = null;
     this.state.judgeId = null;
     this.state.guardianAngelId = null;
     this.state.sheriffId = null;
@@ -974,6 +1023,9 @@ export class GameRoom {
       ventEndsAt: this.state.ventAvailableUntil || null,
       gameEndsAt: this.state.gameEndsAt,
       crewTaskProgress: this.crewTaskProgress(),
+      sabotagePuzzle: this.state.sabotagePuzzle
+        ? { scrambled: this.state.sabotagePuzzle.scrambled, solved: this.state.sabotagePuzzle.solved }
+        : null,
     };
   }
 

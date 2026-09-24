@@ -95,6 +95,21 @@ export function bumpKillConfirmed() {
   vibrate(60);
 }
 
+/** A quick, bright ding — one of the two sabotage words was just solved. */
+export function alertSabotageWordSolved() {
+  vibrate(40);
+  playSequence([{ freq: 900, at: 0, dur: 0.08 }]);
+}
+
+/** Relief cue — both words solved, the accelerated drain just stopped. */
+export function alertSabotageStopped() {
+  vibrate([80, 50, 80]);
+  playSequence([
+    { freq: 660, at: 0, dur: 0.1 },
+    { freq: 880, at: 0.12, dur: 0.18 },
+  ]);
+}
+
 export function alertClockLow() {
   vibrate([150, 80, 150]);
   playSequence([

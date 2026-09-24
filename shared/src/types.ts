@@ -102,6 +102,12 @@ export interface MeetingResult {
   judgeMisfired?: boolean;
 }
 
+/** The live sabotage minigame — two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
+export interface SabotagePuzzle {
+  scrambled: [string, string];
+  solved: [boolean, boolean];
+}
+
 export interface GameOverInfo {
   winner: 'crewmates' | 'impostors';
   players: { id: string; name: string; role: PlayerRole; status: PlayerStatus }[];
@@ -124,6 +130,8 @@ export interface RoomStateSummary {
   gameEndsAt: number | null;
   /** Aggregate crew task completion, visible to everyone (including the impostor) — same info the classic task bar gives. */
   crewTaskProgress: { done: number; total: number };
+  /** The active sabotage puzzle, if any. Null when no sabotage is in progress. */
+  sabotagePuzzle: SabotagePuzzle | null;
 }
 
 // ---- Socket.IO event payloads ----
@@ -151,6 +159,10 @@ export interface ServerToClientEvents {
   sabotage_status: (payload: { usesRemaining: number; availableAt: number }) => void;
   /** Broadcast to everyone the instant a sabotage lands, so the clock jump has a beat to it. */
   sabotage_triggered: () => void;
+  /** Broadcast when either word in the active sabotage puzzle gets solved. */
+  sabotage_word_solved: (payload: { wordIndex: 0 | 1 }) => void;
+  /** Broadcast when both words are solved and the sabotage's accelerated drain stops. */
+  sabotage_stopped: () => void;
   /** Sent to a crewmate the moment they become the Guardian Angel (i.e. right after they die, if the role is on). */
   guardian_angel_assigned: () => void;
   /** Private confirmation to the Guardian Angel that their shield just saved someone. */
@@ -189,8 +201,13 @@ export interface ClientToServerEvents {
   call_meeting: (payload: { reason: MeetingReason }) => void;
   cast_vote: (payload: { targetId: string | 'skip' }) => void;
   play_again: () => void;
-  /** Impostor-only: spend a sabotage charge to cut the shared game clock. */
+  /** Impostor-only: spend a sabotage charge to start the unscramble minigame. */
   trigger_sabotage: () => void;
+  /** Anyone's guess at one of the two active sabotage words. */
+  submit_unscramble: (
+    payload: { wordIndex: 0 | 1; guess: string },
+    cb: (res: { ok: boolean }) => void
+  ) => void;
   /** The Judge's one-time vote overrule. */
   judge_overrule: (payload: { targetId: string }) => void;
   /** The Guardian Angel's one-time shield. */

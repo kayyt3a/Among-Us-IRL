@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useGame } from '../state/GameProvider';
 import type { RoomType } from '@irl-impostor/shared';
 import Countdown from '../components/Countdown';
+import SabotagePuzzleCard from '../components/SabotagePuzzleCard';
 
 const ROOM_LABELS: Record<RoomType, string> = {
   kitchen: 'Kitchen',
@@ -41,7 +42,8 @@ export default function Game() {
   );
   const protectTargets = room.players.filter((p) => p.status === 'alive');
 
-  const sabotageReady = game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt;
+  const sabotageReady =
+    game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt && !room.sabotagePuzzle;
   const canGuardianProtect =
     game.dead && game.mySpecialRole === 'guardian-angel' && !game.specialRoleUsed;
   const canSheriffShoot =
@@ -104,6 +106,8 @@ export default function Game() {
           </div>
         </div>
       )}
+
+      {room.sabotagePuzzle && <SabotagePuzzleCard puzzle={room.sabotagePuzzle} />}
 
       {game.dead ? (
         <div className="card center">

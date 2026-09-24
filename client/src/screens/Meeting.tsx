@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../state/GameProvider';
 import Countdown from '../components/Countdown';
+import SabotagePuzzleCard from '../components/SabotagePuzzleCard';
 
 export default function Meeting() {
   const game = useGame();
@@ -43,6 +44,8 @@ export default function Meeting() {
           </p>
         </div>
       )}
+
+      {room.sabotagePuzzle && <SabotagePuzzleCard puzzle={room.sabotagePuzzle} />}
 
       {meeting.phase === 'discussion' && (
         <div className="card center stack">
