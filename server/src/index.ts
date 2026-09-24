@@ -90,6 +90,18 @@ function sendSabotageStatus(room: GameRoom) {
   }
 }
 
+/** Each impostor has their own kill cooldown, unlike sabotage which is shared. */
+function sendKillStatus(room: GameRoom, playerId: string) {
+  const p = room.state.players.get(playerId);
+  if (p?.role === 'impostor' && p.socketId) {
+    io.to(p.socketId).emit('kill_status', { availableAt: p.killCooldownUntil });
+  }
+}
+
+function sendKillStatusToAllImpostors(room: GameRoom) {
+  for (const id of room.state.playerOrder) sendKillStatus(room, id);
+}
+
 function notifyGuardianShieldUsed(room: GameRoom) {
   const guardian = room.state.guardianAngelId ? room.state.players.get(room.state.guardianAngelId) : null;
   if (guardian?.socketId) io.to(guardian.socketId).emit('guardian_protection_used');
@@ -282,6 +294,7 @@ io.on('connection', (socket) => {
           usesRemaining: room.state.sabotageUsesRemaining,
           availableAt: room.state.sabotageAvailableAt,
         });
+        socket.emit('kill_status', { availableAt: player.killCooldownUntil });
       }
     }
     if (room.state.meeting) {
@@ -320,6 +333,7 @@ io.on('connection', (socket) => {
       }
     }
     sendSabotageStatus(room);
+    sendKillStatusToAllImpostors(room);
     scheduleGameClock(room);
     broadcastRoomUpdate(room);
   });
@@ -353,6 +367,7 @@ io.on('connection', (socket) => {
     socket.emit('kill_result', { ok: true });
     const target = room.state.players.get(targetId);
     if (target?.socketId) io.to(target.socketId).emit('you_died');
+    sendKillStatus(room, playerId);
     broadcastRoomUpdate(room);
     if (res.winner) {
       clearGameClockTimer(room.state.code);
@@ -381,6 +396,7 @@ io.on('connection', (socket) => {
       socket.emit('kill_attempt_result', { ok: true, instant: true });
       const target = room.state.players.get(targetId);
       if (target?.socketId) io.to(target.socketId).emit('you_died');
+      sendKillStatus(room, playerId);
       broadcastRoomUpdate(room);
       if (res.winner) {
         clearGameClockTimer(room.state.code);
@@ -429,6 +445,7 @@ io.on('connection', (socket) => {
     const killer = room.state.players.get(res.killerId);
     if (killer?.socketId) io.to(killer.socketId).emit('kill_attempt_result', { ok: true });
     socket.emit('you_died');
+    sendKillStatus(room, res.killerId);
     broadcastRoomUpdate(room);
     if (res.winner) {
       clearGameClockTimer(room.state.code);

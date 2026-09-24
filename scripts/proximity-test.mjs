@@ -53,6 +53,10 @@ async function main() {
   sockets.forEach((s) => s.emit('report_mic_status', { available: true }));
   await wait(100);
 
+  // Impostors can't kill for the first 45s of a round; wait that out
+  console.log('waiting out the round-start kill delay (~45s)...');
+  await wait(45500);
+
   // --- Test 1: happy path, target hears the correct tone ---
   console.log('\n--- Test 1: correct tone confirms the kill ---');
   const listenStartP = waitFor(sockets[impA], 'kill_listen_start');

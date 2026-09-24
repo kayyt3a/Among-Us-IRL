@@ -85,7 +85,8 @@ async function testCommonTaskAndPacing() {
   assert(gaIdx !== undefined, 'a crewmate was assigned Guardian Angel');
   assert(judgeIdx !== gaIdx, 'Judge and Guardian Angel are different players');
 
-  console.log('--- Kill cooldown ---');
+  console.log('--- Kill cooldown (waiting out the ~45s round-start kill delay first) ---');
+  await wait(45500);
   const victim1 = crewIdxs.find((i) => i !== gaIdx);
   const killResult1 = await new Promise((resolve) => {
     sockets[impostorIdx].once('kill_result', resolve);
@@ -234,7 +235,8 @@ async function testGuardianAngelShield() {
   const shieldTarget = crewIdxs.find((i) => i !== gaIdx);
   const otherTarget = crewIdxs.find((i) => i !== gaIdx && i !== shieldTarget);
 
-  console.log('--- Impostor A kills the Guardian Angel ---');
+  console.log('--- Impostor A kills the Guardian Angel (waiting out the ~45s round-start kill delay) ---');
+  await wait(45500);
   const gaDied = waitFor(sockets[gaIdx], 'you_died');
   sockets[impA].emit('kill_player', { targetId: playerIds[gaIdx] });
   await gaDied;

@@ -30,8 +30,12 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    classic Among Us task bar gives, useful for the crew to gauge urgency
    and for the impostor to bluff and time sabotage without it ever
    revealing who personally is behind.
-8. The impostor eliminates nearby players by tapping **Eliminate** and
-   picking a target. Proximity is verified with an audio handshake: the
+8. Impostors can't kill for the first 45 seconds of a round, and there's
+   the same 45-second cooldown between kills, so it's never instant or
+   back-to-back. The Eliminate button greys out with a live countdown
+   while it's on cooldown. Once it's ready, the impostor eliminates
+   nearby players by tapping **Eliminate** and picking a target.
+   Proximity is verified with an audio handshake: the
    impostor's phone plays a short near-ultrasonic tone (Web Audio), and
    the target's phone silently listens for it via the mic (`getUserMedia`
    + an FFT analyser). If it hears the exact tone the server assigned

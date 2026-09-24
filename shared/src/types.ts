@@ -157,6 +157,8 @@ export interface ServerToClientEvents {
   error_message: (payload: { message: string }) => void;
   /** Impostor-only: current sabotage charges and when the next one is available. */
   sabotage_status: (payload: { usesRemaining: number; availableAt: number }) => void;
+  /** Impostor-only: when they're next allowed to kill (there's a delay at round start, then between kills). */
+  kill_status: (payload: { availableAt: number }) => void;
   /** Broadcast to everyone the instant a sabotage lands, so the clock jump has a beat to it. */
   sabotage_triggered: () => void;
   /** Broadcast when either word in the active sabotage puzzle gets solved. */

@@ -44,6 +44,7 @@ export default function Game() {
 
   const sabotageReady =
     game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt && !room.sabotagePuzzle;
+  const killReady = Date.now() >= game.killAvailableAt;
   const canGuardianProtect =
     game.dead && game.mySpecialRole === 'guardian-angel' && !game.specialRoleUsed;
   const canSheriffShoot =
@@ -151,14 +152,27 @@ export default function Game() {
         </div>
       )}
 
+      {isImpostor && !game.dead && !killReady && (
+        <div className="card center" style={{ padding: 12 }}>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Eliminate ready in
+          </p>
+          <div style={{ fontSize: 20 }}>
+            <Countdown endsAt={game.killAvailableAt} />
+          </div>
+        </div>
+      )}
+
       {isImpostor && !game.dead && (
         <div className="row">
           <button
             className="btn btn-danger btn-block"
-            disabled={game.killAttempt.status === 'pending' || game.killAttempt.status === 'listening'}
+            disabled={
+              !killReady || game.killAttempt.status === 'pending' || game.killAttempt.status === 'listening'
+            }
             onClick={() => setKilling(true)}
           >
-            Eliminate
+            {killReady ? 'Eliminate' : 'Eliminate unavailable'}
           </button>
           <button className="btn btn-block" disabled={!room.ventAvailable} onClick={game.triggerVent}>
             {room.ventAvailable ? 'Vent (blackout)' : 'Vent unavailable'}

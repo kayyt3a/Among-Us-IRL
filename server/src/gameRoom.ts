@@ -193,6 +193,7 @@ export class GameRoom {
 
   /** Assigns roles, special roles, and deals out unique tasks (plus the one shared common task) to every player. */
   startGame(): Map<string, PrivateInfo> {
+    const now = Date.now();
     const ids = shuffle(this.state.playerOrder);
     const impostorIds = new Set(ids.slice(0, this.state.impostorCount));
     const crewmateIds = this.state.playerOrder.filter((id) => !impostorIds.has(id));
@@ -266,7 +267,8 @@ export class GameRoom {
                 : null;
       player.specialRoleUsed = false;
       player.meetingsCalled = 0;
-      player.killCooldownUntil = 0;
+      // No instant kills the moment roles are dealt, everyone needs a chance to spread out first.
+      player.killCooldownUntil = role === 'impostor' ? now + KILL_COOLDOWN_MS : 0;
 
       const fellowImpostors =
         role === 'impostor' && impostorIds.size > 1
@@ -288,7 +290,6 @@ export class GameRoom {
     this.state.nextMeetingAvailableAt = 0;
     this.state.pendingKill = null;
     this.state.protectedPlayerId = null;
-    const now = Date.now();
     this.state.gameStartedAt = now;
     this.state.gameEndsAt = now + GAME_DURATION_MS;
     this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
@@ -338,7 +339,7 @@ export class GameRoom {
       return { ok: false, error: 'Only a living impostor can do that.' };
     }
     if (Date.now() < killer.killCooldownUntil) {
-      return { ok: false, error: 'Still on cooldown from the last kill.' };
+      return { ok: false, error: "Can't kill yet, still on cooldown." };
     }
     if (!target || target.status !== 'alive' || target.role === 'impostor') {
       return { ok: false, error: 'Invalid target.' };

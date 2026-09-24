@@ -63,6 +63,10 @@ async function main() {
   const ack = await waitFor(sockets[crewIdx], 'task_ack');
   console.log('task ack ok:', ack.taskId === state.tasks[crewIdx][0].taskId);
 
+  // impostors can't kill for the first 45s of a round; wait that out
+  console.log('waiting out the round-start kill delay (~45s)...');
+  await wait(45500);
+
   // impostor kills another crewmate
   const victimIdx = Object.entries(state.roles).find(
     ([idx, r]) => r === 'crewmate' && idx !== crewIdx
