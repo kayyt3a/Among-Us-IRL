@@ -192,6 +192,23 @@ export default function Lobby() {
               {settings.engineerEnabled ? 'ON' : 'OFF'}
             </button>
           </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Latecomers play immediately
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                OFF: they spectate until the next round instead
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.lateJoinersPlayNow ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ lateJoinersPlayNow: !settings.lateJoinersPlayNow })}
+            >
+              {settings.lateJoinersPlayNow ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
       ) : (
         <p className="subtitle center">Waiting for the host to start the game…</p>

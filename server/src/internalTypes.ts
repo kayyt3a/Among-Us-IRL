@@ -6,6 +6,7 @@ import {
   MeetingReason,
   MeetingPhase,
   SpecialRole,
+  Task,
 } from '@irl-impostor/shared';
 
 export interface ServerPlayer {
@@ -61,6 +62,7 @@ export interface GameRoomState {
   sheriffEnabled: boolean;
   engineerEnabled: boolean;
   customTasks: string[];
+  lateJoinersPlayNow: boolean;
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;
@@ -83,4 +85,6 @@ export interface GameRoomState {
   gameStartedAt: number | null;
   /** Rounds won per player id, persisted across resetToLobby for the life of the room. */
   wins: Map<string, number>;
+  /** This round's shared common task, kept around so a late joiner can be dealt the same one. */
+  commonTask: Task | null;
 }

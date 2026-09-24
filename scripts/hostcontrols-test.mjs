@@ -20,7 +20,7 @@ function assert(cond, msg) {
 }
 
 async function main() {
-  const names = ['Host', 'Alice', 'Bob', 'Cara', 'Dan', 'Straggler'];
+  const names = ['Host', 'Alice', 'Bob', 'Cara', 'Dan', 'Straggler', 'LateJoiner2'];
   const sockets = names.map(() => io(URL, { transports: ['websocket'] }));
   await Promise.all(sockets.map((s) => waitFor(s, 'connect')));
 
@@ -54,8 +54,14 @@ async function main() {
   assert(latestRoom.players.find((p) => p.id === playerIds[1]).isHost === true, 'Alice is now host');
 
   console.log('\n=== Round 1: new host starts, Straggler joins mid-round as a spectator ===');
-  sockets[1].emit('update_settings', { meetingSpot: 'Kitchen', tasksPerPlayer: 3, impostorCount: 1 });
+  sockets[1].emit('update_settings', {
+    meetingSpot: 'Kitchen',
+    tasksPerPlayer: 3,
+    impostorCount: 1,
+    lateJoinersPlayNow: false, // off, so this round exercises the spectator path
+  });
   await wait(150);
+  assert(latestRoom.settings.lateJoinersPlayNow === false, 'lateJoinersPlayNow off is reflected in room_update');
 
   const round1Started = {};
   const round1Promises = [sockets[0], sockets[1], sockets[2], sockets[3]].map(
@@ -108,7 +114,9 @@ async function main() {
     'Straggler is a normal player again for the next round'
   );
 
+  sockets[1].emit('update_settings', { lateJoinersPlayNow: true });
   await wait(150);
+  assert(latestRoom.settings.lateJoinersPlayNow === true, 'lateJoinersPlayNow back on for round 2');
 
   // Dan was kicked back in the lobby, so this room is Host, Alice, Bob, Cara, Straggler = 5
   // players. maxImpostors for 5 players is still 1, so this stays a 1-impostor round —
@@ -126,6 +134,25 @@ async function main() {
   const round2CrewCount = Object.values(round2Started).filter((info) => info.role === 'crewmate').length;
   assert(round2CrewCount === 4, `round 2 has 4 crewmates (got ${round2CrewCount})`);
 
+  console.log('--- LateJoiner2 joins round 2 mid-game and plays immediately (lateJoinersPlayNow on) ---');
+  const lateJoiner2 = sockets[6];
+  const lateJoiner2StartedPromise = waitFor(lateJoiner2, 'game_started');
+  const lateJoinRes = await new Promise((resolve) =>
+    lateJoiner2.emit('join_room', { code, name: names[6] }, resolve)
+  );
+  assert(lateJoinRes.ok === true, 'LateJoiner2 could join mid-round 2');
+  const lateJoiner2Info = await lateJoiner2StartedPromise;
+  assert(lateJoiner2Info.role === 'crewmate', 'LateJoiner2 was dealt straight in as a crewmate');
+  assert(lateJoiner2Info.tasks.length === 4, 'LateJoiner2 got a full task list (3 + the common task)');
+  assert(lateJoiner2Info.tasks.some((t) => t.common), 'LateJoiner2 was dealt the same common task as everyone else');
+  await wait(150);
+  assert(
+    latestRoom.players.find((p) => p.id === lateJoinRes.playerId)?.isSpectator === false,
+    'LateJoiner2 is not marked a spectator — they are playing this round'
+  );
+  round2Sockets.push(lateJoiner2);
+  round2Started[round2Sockets.length - 1] = lateJoiner2Info;
+
   console.log('--- Everyone finishes their tasks again; crew wins round 2 too ---');
   const round2GameOverPromise = waitFor(sockets[0], 'game_over', 8000);
   for (let i = 0; i < round2Sockets.length; i++) {
@@ -139,11 +166,13 @@ async function main() {
 
   const winsAfterRound2 = new Map(latestRoom.players.map((p) => [p.id, p.wins]));
   const round2WinTotal = [...winsAfterRound2.values()].reduce((a, b) => a + b, 0);
-  const expectedTotal = round1WinTotal + round2CrewCount;
+  // round1's 3 crew winners, plus round2's 4 original crewmates + LateJoiner2 (also crew).
+  const expectedTotal = round1WinTotal + round2CrewCount + 1;
   assert(
     round2WinTotal === expectedTotal,
-    `win tally accumulated across both rounds (got ${round2WinTotal}, expected ${expectedTotal})`
+    `win tally accumulated across both rounds, including LateJoiner2 (got ${round2WinTotal}, expected ${expectedTotal})`
   );
+  assert((winsAfterRound2.get(lateJoinRes.playerId) ?? 0) === 1, 'LateJoiner2 was credited a win too');
   assert(
     [...winsAfterRound2.values()].every((w) => w <= 2),
     'no player has more wins than rounds played (2)'

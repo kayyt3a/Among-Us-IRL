@@ -70,6 +70,8 @@ export interface RoomSettings {
   engineerEnabled: boolean;
   /** Extra tasks the host typed in, mixed into the pool alongside the built-in ones. */
   customTasks: string[];
+  /** If true (default), anyone who joins after a round has started gets dropped in as a crewmate immediately instead of spectating. */
+  lateJoinersPlayNow: boolean;
 }
 
 export interface MeetingVoteTally {

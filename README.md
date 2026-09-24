@@ -70,11 +70,14 @@ play — no accounts, no app install, no QR codes or Bluetooth.
     recaps how many tasks got done and how long the match ran, next
     to the final roles — and every player's win tally for the session
     so far, since a room keeps score across rounds.
-14. Anyone who joins after a round has already started comes in as a
-    **spectator** for that round (they can watch, but not vote, call
-    meetings, or get a role) and plays normally from the next round on.
-    The host can also kick a player or hand host powers to someone else
-    from the lobby.
+14. By default, anyone who joins after a round has already started is
+    dealt straight in as a crewmate (their own fresh task list, plus
+    the round's common task) so latecomers can jump right into the
+    party. The host can flip **"Latecomers play immediately"** off in
+    the lobby if they'd rather late joiners **spectate** that round
+    (watch only, no vote, no meeting, no role) and play from the next
+    round on instead. The host can also kick a player or hand host
+    powers to someone else from the lobby.
 
 ## Tech stack
 
@@ -183,19 +186,21 @@ landing on the real impostor and misfiring on an innocent crewmate
 
 `scripts/hostcontrols-test.mjs` (`npm run test:hostcontrols`) covers
 the host kicking a player from the lobby, transferring host mid-game,
-a late joiner landing as a spectator (can't vote or call meetings, no
-role for that round, becomes a normal player next round), and win
-tallies accumulating correctly across two rounds in the same room.
+a late joiner being dealt straight into the round as a crewmate
+(default), a late joiner landing as a spectator instead when the host
+turns that off, and win tallies accumulating correctly across two
+rounds in the same room.
 
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count
 (scales with player count), the meeting spot (required to start),
-custom tasks, and whether the Judge / Guardian Angel / Sheriff /
-Engineer roles are in play. Everything else — meeting timers, the vent
-window, kill cooldown, meeting limit/cooldown, game clock length,
-sabotage charges/cooldown/penalty, room idle cleanup — lives in
-`server/src/constants.ts`.
+custom tasks, whether the Judge / Guardian Angel / Sheriff / Engineer
+roles are in play, and whether latecomers play immediately or spectate
+(this one can also be flipped mid-game). Everything else — meeting
+timers, the vent window, kill cooldown, meeting limit/cooldown, game
+clock length, sabotage charges/cooldown/penalty, room idle cleanup —
+lives in `server/src/constants.ts`.
 
 ## MVP scope
 
@@ -207,9 +212,10 @@ synced timer and vote, four optional roles (Judge, Guardian Angel,
 Sheriff, Engineer), sound + haptic feedback for the game's key
 moments, an end-of-game recap (tasks done, match length, final roles,
 win tallies), a persistent per-room scoreboard across rounds, host
-controls (kick, transfer host), mid-round joiners as spectators, win
-conditions, reconnect-on-refresh, a PWA manifest, and a Dockerfile +
-`fly.toml` for deploying it somewhere reachable.
+controls (kick, transfer host, toggling whether mid-round joiners play
+immediately or spectate), win conditions, reconnect-on-refresh, a PWA
+manifest, and a Dockerfile + `fly.toml` for deploying it somewhere
+reachable.
 
 Not implemented yet (see the project spec for the full list): ads,
 accounts, themed/preset task packs beyond free-typed custom tasks.

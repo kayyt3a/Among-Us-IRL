@@ -3,11 +3,12 @@ import http from 'http';
 import cors from 'cors';
 import path from 'path';
 import { Server, Socket } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents } from '@irl-impostor/shared';
+import type { ClientToServerEvents, PrivateGameInfo, ServerToClientEvents } from '@irl-impostor/shared';
 import { PROXIMITY_FREQUENCIES_HZ } from '@irl-impostor/shared';
 import { GameRoom } from './gameRoom';
 import { generateRoomCode } from './roomCode';
 import { MAX_PLAYERS, ROOM_IDLE_CLEANUP_MS, VENT_DURATION_MS } from './constants';
+import type { ServerPlayer } from './internalTypes';
 
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
@@ -195,15 +196,24 @@ io.on('connection', (socket) => {
     }
     if (!name || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
 
-    // Joining mid-round means watching this round as a spectator — they
-    // become a full player automatically from the next round on.
-    const isSpectator = room.state.phase !== 'lobby';
-    const player = room.addPlayer(name, false, isSpectator);
+    const joiningMidRound = room.state.phase !== 'lobby';
+    let player: ServerPlayer;
+    let lateInfo: PrivateGameInfo | null = null;
+    if (joiningMidRound && room.state.lateJoinersPlayNow) {
+      // Host has left late joiners on "play now": drop them straight in as a crewmate.
+      const res = room.addLateJoinerAsCrewmate(name);
+      player = res.player;
+      lateInfo = res.info;
+    } else {
+      // Spectate this round, become a full player automatically from the next one on.
+      player = room.addPlayer(name, false, joiningMidRound);
+    }
     player.socketId = socket.id;
     socketMeta.set(socket.id, { code: room.state.code, playerId: player.id });
     socket.join(room.state.code);
 
     cb({ ok: true, code: room.state.code, playerId: player.id });
+    if (lateInfo) socket.emit('game_started', lateInfo);
     broadcastRoomUpdate(room);
   });
 

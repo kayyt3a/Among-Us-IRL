@@ -67,6 +67,7 @@ export class GameRoom {
       sheriffEnabled: false,
       engineerEnabled: false,
       customTasks: [],
+      lateJoinersPlayNow: true,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -85,6 +86,7 @@ export class GameRoom {
       protectedPlayerId: null,
       gameStartedAt: null,
       wins: new Map(),
+      commonTask: null,
     };
   }
 
@@ -142,6 +144,10 @@ export class GameRoom {
     // the agreed spot stops working out.
     if (partial.meetingSpot !== undefined) {
       this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
+      this.touch();
+    }
+    if (partial.lateJoinersPlayNow !== undefined) {
+      this.state.lateJoinersPlayNow = partial.lateJoinersPlayNow;
       this.touch();
     }
 
@@ -211,6 +217,7 @@ export class GameRoom {
     const neededTasks = this.state.playerOrder.length * this.state.tasksPerPlayer;
     const pool = shuffle(taskPool).slice(0, Math.min(neededTasks, taskPool.length));
     const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
+    this.state.commonTask = commonTask;
 
     let cursor = 0;
     const result = new Map<string, PrivateInfo>();
@@ -828,7 +835,48 @@ export class GameRoom {
     this.state.engineerId = null;
     this.state.protectedPlayerId = null;
     this.state.gameStartedAt = null;
+    this.state.commonTask = null;
     this.touch();
+  }
+
+  /**
+   * A player joining after the round has already started, when the host has
+   * left late joiners on "play now": dealt straight in as a crewmate with a
+   * fresh task list (plus the round's shared common task), never an
+   * impostor and never a special role — those were only ever fair to
+   * assign at the original startGame().
+   */
+  addLateJoinerAsCrewmate(name: string): { player: ServerPlayer; info: PrivateInfo } {
+    const player = this.addPlayer(name, false, false);
+    const pool = shuffle(ALL_TASKS.concat(buildCustomTasks(this.state.customTasks)));
+    const slice: PlayerTask[] = [];
+    for (let i = 0; i < this.state.tasksPerPlayer; i++) {
+      const t = pool[i % pool.length];
+      slice.push({
+        taskId: `${player.id}:${t.id}:${i}`,
+        text: t.text,
+        room: t.room,
+        done: false,
+        visual: t.visual,
+        common: false,
+      });
+    }
+    const commonTask = this.state.commonTask;
+    if (commonTask) {
+      slice.push({
+        taskId: `${player.id}:${commonTask.id}`,
+        text: commonTask.text,
+        room: commonTask.room,
+        done: false,
+        visual: commonTask.visual,
+        common: true,
+      });
+    }
+    player.role = 'crewmate';
+    player.tasks = slice;
+    player.status = 'alive';
+    this.touch();
+    return { player, info: { role: 'crewmate', tasks: slice } };
   }
 
   /** Host-only, lobby-only: removes a player from the room outright. */
@@ -905,6 +953,7 @@ export class GameRoom {
         sheriffEnabled: this.state.sheriffEnabled,
         engineerEnabled: this.state.engineerEnabled,
         customTasks: this.state.customTasks,
+        lateJoinersPlayNow: this.state.lateJoinersPlayNow,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)
