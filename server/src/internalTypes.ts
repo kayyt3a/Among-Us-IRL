@@ -56,6 +56,9 @@ export interface GameRoomState {
   meetingSpot: string;
   judgeEnabled: boolean;
   guardianAngelEnabled: boolean;
+  sheriffEnabled: boolean;
+  engineerEnabled: boolean;
+  customTasks: string[];
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;
@@ -70,6 +73,10 @@ export interface GameRoomState {
   sabotageAvailableAt: number;
   judgeId: string | null;
   guardianAngelId: string | null;
+  sheriffId: string | null;
+  engineerId: string | null;
   /** The one living player the Guardian Angel has shielded from the next kill. */
   protectedPlayerId: string | null;
+  /** When the current match started, for the end-of-game duration stat. */
+  gameStartedAt: number | null;
 }

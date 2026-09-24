@@ -1,10 +1,25 @@
+import { useState } from 'react';
 import { useGame } from '../state/GameProvider';
+
+const MAX_CUSTOM_TASKS = 20;
 
 export default function Lobby() {
   const game = useGame();
   const room = game.room!;
   const settings = room.settings;
   const maxImpostors = Math.max(1, Math.floor(room.players.length / 3));
+  const [customDraft, setCustomDraft] = useState('');
+
+  function addCustomTask() {
+    const text = customDraft.trim();
+    if (!text || settings.customTasks.length >= MAX_CUSTOM_TASKS) return;
+    game.updateSettings({ customTasks: [...settings.customTasks, text] });
+    setCustomDraft('');
+  }
+
+  function removeCustomTask(index: number) {
+    game.updateSettings({ customTasks: settings.customTasks.filter((_, i) => i !== index) });
+  }
 
   return (
     <div className="app-shell stack">
@@ -131,10 +146,89 @@ export default function Lobby() {
               {settings.guardianAngelEnabled ? 'ON' : 'OFF'}
             </button>
           </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Sheriff
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                One crewmate can shoot a suspect once — an innocent guess kills the Sheriff instead
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.sheriffEnabled ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ sheriffEnabled: !settings.sheriffEnabled })}
+            >
+              {settings.sheriffEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Engineer
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                One crewmate can trigger a decoy blackout vent once, for misdirection
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.engineerEnabled ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ engineerEnabled: !settings.engineerEnabled })}
+            >
+              {settings.engineerEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
       ) : (
         <p className="subtitle center">Waiting for the host to start the game…</p>
       )}
+
+      <div className="card stack">
+        <h3>Custom tasks</h3>
+        <p className="subtitle">
+          Add your own tasks — mixed in with the built-in pool for everyone. Optional.
+        </p>
+        {game.isHost && (
+          <div className="row">
+            <input
+              className="field"
+              placeholder="e.g. Do your best chicken impression"
+              value={customDraft}
+              maxLength={80}
+              onChange={(e) => setCustomDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addCustomTask()}
+            />
+            <button
+              className="btn btn-sm"
+              disabled={!customDraft.trim() || settings.customTasks.length >= MAX_CUSTOM_TASKS}
+              onClick={addCustomTask}
+            >
+              Add
+            </button>
+          </div>
+        )}
+        {settings.customTasks.length === 0 ? (
+          <p className="subtitle" style={{ margin: 0 }}>
+            None yet — just the built-in task pools.
+          </p>
+        ) : (
+          <div className="stack" style={{ gap: 6 }}>
+            {settings.customTasks.map((t, i) => (
+              <div className="player-row" key={i}>
+                <span>{t}</span>
+                <div className="spacer" />
+                {game.isHost && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => removeCustomTask(i)}>
+                    Remove
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="spacer" />
 

@@ -111,6 +111,17 @@ async function main() {
   console.log('meeting result:', result);
   const gameOver = await gameOverPromise;
   console.log('game over:', gameOver.winner, gameOver.players);
+  console.log(
+    'recap stats — tasks:',
+    `${gameOver.tasksCompleted}/${gameOver.tasksTotal}`,
+    'duration ms:',
+    gameOver.durationMs
+  );
+  if (gameOver.tasksTotal <= 0) throw new Error('expected tasksTotal > 0 in game_over payload');
+  if (gameOver.tasksCompleted < 1) throw new Error('expected at least the one completed task to be counted');
+  if (typeof gameOver.durationMs !== 'number' || gameOver.durationMs < 0) {
+    throw new Error('expected a non-negative durationMs in game_over payload');
+  }
 
   console.log('\nSMOKE TEST PASSED');
   sockets.forEach((s) => s.disconnect());

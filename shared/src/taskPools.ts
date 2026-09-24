@@ -139,3 +139,16 @@ export const COMMON_TASKS: Task[] = rawCommon.map((t, i) => ({
   text: t.text,
   visual: t.visual,
 }));
+
+export const MAX_CUSTOM_TASKS = 20;
+export const MAX_CUSTOM_TASK_LENGTH = 80;
+
+/** Turns the host's typed-in task text into Task objects for the assignment pool. */
+export function buildCustomTasks(customTaskTexts: string[]): Task[] {
+  return customTaskTexts.map((text, i) => ({
+    id: `custom-${i}`,
+    room: 'any-room',
+    text,
+    visual: false,
+  }));
+}

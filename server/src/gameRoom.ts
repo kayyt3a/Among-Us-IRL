@@ -1,12 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import {
   ALL_TASKS,
+  buildCustomTasks,
   COMMON_TASKS,
   GameOverInfo,
+  MAX_CUSTOM_TASK_LENGTH,
+  MAX_CUSTOM_TASKS,
   MeetingReason,
   MeetingResult,
   MeetingState,
   MeetingVoteTally,
+  PlayerRole,
   PlayerTask,
   PROXIMITY_FREQUENCIES_HZ,
   PROXIMITY_WINDOW_MS,
@@ -60,6 +64,9 @@ export class GameRoom {
       meetingSpot: '',
       judgeEnabled: false,
       guardianAngelEnabled: false,
+      sheriffEnabled: false,
+      engineerEnabled: false,
+      customTasks: [],
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -73,7 +80,10 @@ export class GameRoom {
       sabotageAvailableAt: 0,
       judgeId: null,
       guardianAngelId: null,
+      sheriffId: null,
+      engineerId: null,
       protectedPlayerId: null,
+      gameStartedAt: null,
     };
   }
 
@@ -145,6 +155,14 @@ export class GameRoom {
     if (partial.guardianAngelEnabled !== undefined) {
       this.state.guardianAngelEnabled = partial.guardianAngelEnabled;
     }
+    if (partial.sheriffEnabled !== undefined) this.state.sheriffEnabled = partial.sheriffEnabled;
+    if (partial.engineerEnabled !== undefined) this.state.engineerEnabled = partial.engineerEnabled;
+    if (partial.customTasks !== undefined) {
+      this.state.customTasks = partial.customTasks
+        .map((t) => t.trim().slice(0, MAX_CUSTOM_TASK_LENGTH))
+        .filter(Boolean)
+        .slice(0, MAX_CUSTOM_TASKS);
+    }
     this.touch();
   }
 
@@ -167,21 +185,29 @@ export class GameRoom {
     const impostorIds = new Set(ids.slice(0, this.state.impostorCount));
     const crewmateIds = this.state.playerOrder.filter((id) => !impostorIds.has(id));
 
-    let judgeId: string | null = null;
-    let guardianAngelId: string | null = null;
-    if (this.state.judgeEnabled && crewmateIds.length > 0) {
-      judgeId = crewmateIds[Math.floor(Math.random() * crewmateIds.length)];
-    }
-    if (this.state.guardianAngelEnabled) {
-      const candidates = crewmateIds.filter((id) => id !== judgeId);
+    // Each special role, when enabled, goes to a distinct crewmate — falling back to
+    // reusing the pool only if there aren't enough crewmates to go around.
+    const assigned = new Set<string>();
+    const pickSpecial = (enabled: boolean): string | null => {
+      if (!enabled || crewmateIds.length === 0) return null;
+      const candidates = crewmateIds.filter((id) => !assigned.has(id));
       const pool = candidates.length > 0 ? candidates : crewmateIds;
-      if (pool.length > 0) guardianAngelId = pool[Math.floor(Math.random() * pool.length)];
-    }
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      assigned.add(pick);
+      return pick;
+    };
+    const judgeId = pickSpecial(this.state.judgeEnabled);
+    const guardianAngelId = pickSpecial(this.state.guardianAngelEnabled);
+    const sheriffId = pickSpecial(this.state.sheriffEnabled);
+    const engineerId = pickSpecial(this.state.engineerEnabled);
     this.state.judgeId = judgeId;
     this.state.guardianAngelId = guardianAngelId;
+    this.state.sheriffId = sheriffId;
+    this.state.engineerId = engineerId;
 
+    const taskPool = ALL_TASKS.concat(buildCustomTasks(this.state.customTasks));
     const neededTasks = this.state.playerOrder.length * this.state.tasksPerPlayer;
-    const pool = shuffle(ALL_TASKS).slice(0, Math.min(neededTasks, ALL_TASKS.length));
+    const pool = shuffle(taskPool).slice(0, Math.min(neededTasks, taskPool.length));
     const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
 
     let cursor = 0;
@@ -215,7 +241,16 @@ export class GameRoom {
       player.role = role;
       player.tasks = slice;
       player.status = 'alive';
-      player.specialRole = id === judgeId ? 'judge' : id === guardianAngelId ? 'guardian-angel' : null;
+      player.specialRole =
+        id === judgeId
+          ? 'judge'
+          : id === guardianAngelId
+            ? 'guardian-angel'
+            : id === sheriffId
+              ? 'sheriff'
+              : id === engineerId
+                ? 'engineer'
+                : null;
       player.specialRoleUsed = false;
       player.meetingsCalled = 0;
       player.killCooldownUntil = 0;
@@ -240,7 +275,9 @@ export class GameRoom {
     this.state.nextMeetingAvailableAt = 0;
     this.state.pendingKill = null;
     this.state.protectedPlayerId = null;
-    this.state.gameEndsAt = Date.now() + GAME_DURATION_MS;
+    const now = Date.now();
+    this.state.gameStartedAt = now;
+    this.state.gameEndsAt = now + GAME_DURATION_MS;
     this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
     this.state.sabotageAvailableAt = 0;
     this.touch();
@@ -631,6 +668,71 @@ export class GameRoom {
     return { ok: true };
   }
 
+  /**
+   * The Sheriff's one-time shot at a suspected impostor. Hits the target if
+   * they really are the impostor; an innocent guess kills the Sheriff
+   * instead. Resolves silently, like an impostor's kill — the body is only
+   * noticed later, never announced.
+   */
+  sheriffShoot(
+    sheriffId: string,
+    targetId: string
+  ):
+    | { ok: true; eliminatedId: string; eliminatedRole: PlayerRole; misfired: boolean; winner: GameOverInfo | null }
+    | { ok: false; error: string } {
+    const sheriff = this.state.players.get(sheriffId);
+    if (!sheriff || sheriff.status !== 'alive' || this.state.sheriffId !== sheriffId) {
+      return { ok: false, error: 'Only the living Sheriff can do that.' };
+    }
+    if (sheriff.specialRoleUsed) {
+      return { ok: false, error: "You've already used your shot." };
+    }
+    if (this.state.phase !== 'playing') {
+      return { ok: false, error: 'Can only shoot during play.' };
+    }
+    const target = this.state.players.get(targetId);
+    if (!target || target.status !== 'alive' || targetId === sheriffId) {
+      return { ok: false, error: 'Invalid target.' };
+    }
+
+    sheriff.specialRoleUsed = true;
+    let eliminatedId: string;
+    let eliminatedRole: PlayerRole;
+    let misfired = false;
+
+    if (target.role === 'impostor') {
+      target.status = 'dead';
+      eliminatedId = target.id;
+      eliminatedRole = 'impostor';
+    } else {
+      sheriff.status = 'dead';
+      eliminatedId = sheriff.id;
+      eliminatedRole = 'crewmate';
+      misfired = true;
+    }
+
+    this.touch();
+    const winner = this.checkWinConditions();
+    return { ok: true, eliminatedId, eliminatedRole, misfired, winner };
+  }
+
+  /** The Engineer's one-time decoy blackout vent — identical to a real vent, for misdirection. */
+  engineerFakeVent(playerId: string): { ok: true } | { ok: false; error: string } {
+    const player = this.state.players.get(playerId);
+    if (!player || player.status !== 'alive' || this.state.engineerId !== playerId) {
+      return { ok: false, error: 'Only the living Engineer can do that.' };
+    }
+    if (player.specialRoleUsed) {
+      return { ok: false, error: "You've already used your vent." };
+    }
+    if (this.state.phase !== 'playing') {
+      return { ok: false, error: 'Can only vent during play.' };
+    }
+    player.specialRoleUsed = true;
+    this.touch();
+    return { ok: true };
+  }
+
   closeMeeting() {
     this.state.meeting = null;
     this.state.nextMeetingAvailableAt = Date.now() + MEETING_COOLDOWN_MS;
@@ -668,12 +770,18 @@ export class GameRoom {
   }
 
   gameOverInfo(winner: 'crewmates' | 'impostors'): GameOverInfo {
+    const allCrew = this.allCrewmates;
+    const tasksCompleted = allCrew.reduce((sum, p) => sum + p.tasks.filter((t) => t.done).length, 0);
+    const tasksTotal = allCrew.reduce((sum, p) => sum + p.tasks.length, 0);
     return {
       winner,
       players: this.state.playerOrder.map((id) => {
         const p = this.state.players.get(id)!;
         return { id: p.id, name: p.name, role: p.role ?? 'crewmate', status: p.status };
       }),
+      tasksCompleted,
+      tasksTotal,
+      durationMs: this.state.gameStartedAt ? Date.now() - this.state.gameStartedAt : 0,
     };
   }
 
@@ -699,7 +807,10 @@ export class GameRoom {
     this.state.sabotageAvailableAt = 0;
     this.state.judgeId = null;
     this.state.guardianAngelId = null;
+    this.state.sheriffId = null;
+    this.state.engineerId = null;
     this.state.protectedPlayerId = null;
+    this.state.gameStartedAt = null;
     this.touch();
   }
 
@@ -743,6 +854,9 @@ export class GameRoom {
         meetingSpot: this.state.meetingSpot,
         judgeEnabled: this.state.judgeEnabled,
         guardianAngelEnabled: this.state.guardianAngelEnabled,
+        sheriffEnabled: this.state.sheriffEnabled,
+        engineerEnabled: this.state.engineerEnabled,
+        customTasks: this.state.customTasks,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)

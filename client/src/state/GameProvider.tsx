@@ -13,6 +13,15 @@ import type {
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
 import { playProximityTone, requestMicPermission, scanForTone } from '../audio/proximity';
+import {
+  alertClockLow,
+  alertGameOver,
+  alertMeetingCalled,
+  alertSabotage,
+  alertVent,
+  alertYouDied,
+  bumpKillConfirmed,
+} from '../audio/feedback';
 
 const STORAGE_KEY = 'irl-impostor-session';
 
@@ -194,6 +203,8 @@ interface GameApi extends State {
   triggerSabotage: () => void;
   judgeOverrule: (targetId: string) => void;
   guardianProtect: (targetId: string) => void;
+  sheriffShoot: (targetId: string) => void;
+  engineerVent: () => void;
   callMeeting: (reason: MeetingReason) => void;
   castVote: (targetId: string | 'skip') => void;
   playAgain: () => void;
@@ -247,22 +258,39 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'task_local_done', taskId: payload.taskId });
     }
     function onYouDied() {
+      alertYouDied();
       dispatch({ type: 'you_died' });
     }
+    function onMeetingCalled() {
+      alertMeetingCalled();
+    }
     function onVent(payload: { durationMs: number }) {
+      alertVent();
       dispatch({ type: 'vent', durationMs: payload.durationMs });
     }
     function onMeetingResult(result: MeetingResult) {
       dispatch({ type: 'meeting_result', result });
     }
     function onGameOver(info: GameOverInfo) {
+      const myRole = stateRef.current.session
+        ? info.players.find((p) => p.id === stateRef.current.session!.playerId)?.role
+        : undefined;
+      const won = myRole ? (myRole === 'impostor') === (info.winner === 'impostors') : info.winner === 'crewmates';
+      alertGameOver(won);
       dispatch({ type: 'game_over', info });
     }
     function onError(payload: { message: string }) {
       dispatch({ type: 'error', message: payload.message });
     }
     function onKillResult(payload: { ok: boolean; message?: string }) {
-      if (!payload.ok && payload.message) dispatch({ type: 'error', message: payload.message });
+      if (payload.ok) {
+        bumpKillConfirmed();
+      } else if (payload.message) {
+        dispatch({ type: 'error', message: payload.message });
+      }
+    }
+    function onAbilityResult(payload: { ok: boolean; message?: string }) {
+      if (payload.message) dispatch({ type: 'error', message: payload.message });
     }
     function onKillListenStart(payload: { frequencyHz: number; windowMs: number }) {
       killToneStopRef.current?.();
@@ -273,6 +301,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       killToneStopRef.current?.();
       killToneStopRef.current = null;
       if (payload.ok) {
+        bumpKillConfirmed();
         dispatch({ type: 'kill_attempt_success' });
       } else {
         dispatch({ type: 'kill_attempt_failed', reason: payload.reason ?? 'Could not verify.' });
@@ -288,6 +317,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'sabotage_status', usesRemaining: payload.usesRemaining, availableAt: payload.availableAt });
     }
     function onSabotageTriggered() {
+      alertSabotage();
       dispatch({ type: 'error', message: '⚠ Sabotage! The clock just got cut.' });
     }
     function onGuardianProtectionUsed() {
@@ -300,6 +330,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('game_started', onGameStarted);
     socket.on('task_ack', onTaskAck);
     socket.on('you_died', onYouDied);
+    socket.on('meeting_called', onMeetingCalled);
     socket.on('vent_triggered', onVent);
     socket.on('meeting_result', onMeetingResult);
     socket.on('game_over', onGameOver);
@@ -311,6 +342,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('sabotage_status', onSabotageStatus);
     socket.on('sabotage_triggered', onSabotageTriggered);
     socket.on('guardian_protection_used', onGuardianProtectionUsed);
+    socket.on('ability_result', onAbilityResult);
 
     if (socket.connected) onConnect();
 
@@ -321,6 +353,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('game_started', onGameStarted);
       socket.off('task_ack', onTaskAck);
       socket.off('you_died', onYouDied);
+      socket.off('meeting_called', onMeetingCalled);
       socket.off('vent_triggered', onVent);
       socket.off('meeting_result', onMeetingResult);
       socket.off('game_over', onGameOver);
@@ -332,6 +365,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('sabotage_status', onSabotageStatus);
       socket.off('sabotage_triggered', onSabotageTriggered);
       socket.off('guardian_protection_used', onGuardianProtectionUsed);
+      socket.off('ability_result', onAbilityResult);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -341,6 +375,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'reset_round' });
     }
   }, [state.room?.phase, state.myRole, state.gameOver]);
+
+  useEffect(() => {
+    const endsAt = state.room?.gameEndsAt;
+    if (!endsAt) return;
+    const msUntilWarning = endsAt - 60_000 - Date.now();
+    if (msUntilWarning <= 0) return;
+    const t = setTimeout(alertClockLow, msUntilWarning);
+    return () => clearTimeout(t);
+  }, [state.room?.gameEndsAt]);
 
   const api = useMemo<GameApi>(() => {
     const me = state.room?.players.find((p) => p.id === state.session?.playerId) ?? null;
@@ -410,6 +453,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       guardianProtect: (targetId: string) => {
         dispatch({ type: 'special_role_used' });
         socket.emit('guardian_protect', { targetId });
+      },
+      sheriffShoot: (targetId: string) => {
+        dispatch({ type: 'special_role_used' });
+        socket.emit('sheriff_shoot', { targetId });
+      },
+      engineerVent: () => {
+        dispatch({ type: 'special_role_used' });
+        socket.emit('engineer_vent');
       },
       callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
       castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),

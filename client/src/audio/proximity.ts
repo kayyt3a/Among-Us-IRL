@@ -12,7 +12,7 @@
 
 type AudioContextCtor = typeof AudioContext;
 
-function getAudioContextCtor(): AudioContextCtor | null {
+export function getAudioContextCtor(): AudioContextCtor | null {
   const w = window as unknown as { AudioContext?: AudioContextCtor; webkitAudioContext?: AudioContextCtor };
   return w.AudioContext ?? w.webkitAudioContext ?? null;
 }

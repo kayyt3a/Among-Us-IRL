@@ -456,6 +456,47 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('sheriff_shoot', ({ targetId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.sheriffShoot(playerId, targetId);
+    if (!res.ok) {
+      socket.emit('ability_result', { ok: false, message: res.error });
+      return;
+    }
+    if (res.misfired) {
+      socket.emit('ability_result', {
+        ok: false,
+        message: 'You shot an innocent crewmate — you were eliminated.',
+      });
+      socket.emit('you_died');
+    } else {
+      socket.emit('ability_result', { ok: true, message: 'You shot the impostor!' });
+      const target = room.state.players.get(res.eliminatedId);
+      if (target?.socketId) io.to(target.socketId).emit('you_died');
+    }
+    broadcastRoomUpdate(room);
+    if (res.winner) {
+      clearGameClockTimer(room.state.code);
+      io.to(room.state.code).emit('game_over', res.winner);
+    }
+  });
+
+  socket.on('engineer_vent', () => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.engineerFakeVent(playerId);
+    if (!res.ok) {
+      socket.emit('ability_result', { ok: false, message: res.error });
+      return;
+    }
+    socket.emit('ability_result', { ok: true, message: 'Fake vent triggered.' });
+    io.to(room.state.code).emit('vent_triggered', { durationMs: VENT_DURATION_MS });
+    broadcastRoomUpdate(room);
+  });
+
   socket.on('play_again', () => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;

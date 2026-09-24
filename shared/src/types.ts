@@ -30,7 +30,7 @@ export type GamePhase = 'lobby' | 'playing' | 'meeting' | 'ended';
 export type MeetingReason = 'report' | 'emergency';
 export type MeetingPhase = 'discussion' | 'voting' | 'results';
 /** Optional extra crewmate roles, layered on top of the base crewmate/impostor split. */
-export type SpecialRole = 'judge' | 'guardian-angel';
+export type SpecialRole = 'judge' | 'guardian-angel' | 'sheriff' | 'engineer';
 
 /** Public player info sent to everyone (no role, no tasks). */
 export interface PublicPlayer {
@@ -60,6 +60,12 @@ export interface RoomSettings {
   judgeEnabled: boolean;
   /** The first crewmate to die can shield one living player from the next kill, once. */
   guardianAngelEnabled: boolean;
+  /** One crewmate can shoot a suspected impostor once; shooting an innocent kills the Sheriff instead. */
+  sheriffEnabled: boolean;
+  /** One crewmate can trigger a decoy blackout vent once, for misdirection. */
+  engineerEnabled: boolean;
+  /** Extra tasks the host typed in, mixed into the pool alongside the built-in ones. */
+  customTasks: string[];
 }
 
 export interface MeetingVoteTally {
@@ -93,6 +99,11 @@ export interface MeetingResult {
 export interface GameOverInfo {
   winner: 'crewmates' | 'impostors';
   players: { id: string; name: string; role: PlayerRole; status: PlayerStatus }[];
+  /** Crewmate task completion at the moment the game ended (a ghost's tasks count too). */
+  tasksCompleted: number;
+  tasksTotal: number;
+  /** How long the match ran for, from start_game to the win. */
+  durationMs: number;
 }
 
 export interface RoomStateSummary {
@@ -136,6 +147,8 @@ export interface ServerToClientEvents {
   guardian_angel_assigned: () => void;
   /** Private confirmation to the Guardian Angel that their shield just saved someone. */
   guardian_protection_used: () => void;
+  /** Result of a Sheriff shot or an Engineer's fake vent, sent only to the player who used it. */
+  ability_result: (payload: { ok: boolean; message?: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -172,4 +185,8 @@ export interface ClientToServerEvents {
   judge_overrule: (payload: { targetId: string }) => void;
   /** The Guardian Angel's one-time shield. */
   guardian_protect: (payload: { targetId: string }) => void;
+  /** The Sheriff's one-time shot — hits the impostor, or backfires and kills the Sheriff. */
+  sheriff_shoot: (payload: { targetId: string }) => void;
+  /** The Engineer's one-time decoy blackout vent. */
+  engineer_vent: () => void;
 }

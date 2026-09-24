@@ -1,5 +1,12 @@
 import { useGame } from '../state/GameProvider';
 
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
 export default function GameOver() {
   const game = useGame();
   const info = game.gameOver!;
@@ -15,6 +22,25 @@ export default function GameOver() {
             ? 'All impostors were caught, or every task got done.'
             : 'The impostors took over the house.'}
         </p>
+      </div>
+
+      <div className="row" style={{ gap: 8 }}>
+        <div className="card center" style={{ flex: 1, padding: 12 }}>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Tasks done
+          </p>
+          <p style={{ fontSize: 20, fontWeight: 800, margin: '4px 0 0' }}>
+            {info.tasksCompleted}/{info.tasksTotal}
+          </p>
+        </div>
+        <div className="card center" style={{ flex: 1, padding: 12 }}>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Game length
+          </p>
+          <p style={{ fontSize: 20, fontWeight: 800, margin: '4px 0 0' }}>
+            {formatDuration(info.durationMs)}
+          </p>
+        </div>
       </div>
 
       <div className="card stack">

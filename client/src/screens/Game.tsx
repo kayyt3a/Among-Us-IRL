@@ -19,6 +19,7 @@ export default function Game() {
   const [editingSpot, setEditingSpot] = useState(false);
   const [spotDraft, setSpotDraft] = useState('');
   const [protecting, setProtecting] = useState(false);
+  const [shooting, setShooting] = useState(false);
 
   const commonTask = game.myTasks.find((t) => t.common) ?? null;
 
@@ -43,6 +44,13 @@ export default function Game() {
   const sabotageReady = game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt;
   const canGuardianProtect =
     game.dead && game.mySpecialRole === 'guardian-angel' && !game.specialRoleUsed;
+  const canSheriffShoot =
+    !game.dead && game.mySpecialRole === 'sheriff' && !game.specialRoleUsed;
+  const canEngineerVent =
+    !game.dead && game.mySpecialRole === 'engineer' && !game.specialRoleUsed;
+  const shootTargets = room.players.filter(
+    (p) => p.id !== game.session?.playerId && p.status === 'alive'
+  );
 
   return (
     <div className={`app-shell stack ${game.dead ? 'ghost-overlay' : ''}`}>
@@ -94,9 +102,14 @@ export default function Game() {
           )}
           {!isImpostor && game.mySpecialRole && (
             <p style={{ margin: '6px 0 0', fontSize: 13 }}>
-              {game.mySpecialRole === 'judge'
-                ? "You're the Judge — during a vote you can overrule the result once."
-                : "You're the Guardian Angel — once you die, you can shield a living player once."}
+              {game.mySpecialRole === 'judge' &&
+                "You're the Judge — during a vote you can overrule the result once."}
+              {game.mySpecialRole === 'guardian-angel' &&
+                "You're the Guardian Angel — once you die, you can shield a living player once."}
+              {game.mySpecialRole === 'sheriff' &&
+                "You're the Sheriff — you can shoot a suspect once. Guess wrong and you're eliminated instead."}
+              {game.mySpecialRole === 'engineer' &&
+                "You're the Engineer — you can trigger a decoy blackout vent once, for misdirection."}
             </p>
           )}
         </div>
@@ -118,6 +131,18 @@ export default function Game() {
             {sabotageReady ? `Sabotage (${game.sabotageUsesRemaining})` : 'Sabotage unavailable'}
           </button>
         </div>
+      )}
+
+      {canSheriffShoot && (
+        <button className="btn btn-danger btn-block" onClick={() => setShooting(true)}>
+          Shoot a suspect
+        </button>
+      )}
+
+      {canEngineerVent && (
+        <button className="btn btn-block" onClick={game.engineerVent}>
+          Trigger decoy vent
+        </button>
       )}
 
       {commonTask && (
@@ -255,6 +280,33 @@ export default function Game() {
               </button>
             ))}
             <button className="btn btn-ghost btn-block" onClick={() => setProtecting(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {shooting && (
+        <div
+          className="toast"
+          style={{ top: 0, bottom: 'auto', position: 'fixed', maxHeight: '80dvh', overflowY: 'auto' }}
+        >
+          <h3>Shoot who?</h3>
+          <p className="subtitle">One shot only. Guess wrong and you're eliminated instead.</p>
+          <div className="stack">
+            {shootTargets.map((p) => (
+              <button
+                key={p.id}
+                className="btn btn-danger btn-block"
+                onClick={() => {
+                  game.sheriffShoot(p.id);
+                  setShooting(false);
+                }}
+              >
+                {p.name}
+              </button>
+            ))}
+            <button className="btn btn-ghost btn-block" onClick={() => setShooting(false)}>
               Cancel
             </button>
           </div>
