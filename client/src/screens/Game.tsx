@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useGame } from '../state/GameProvider';
 import type { RoomType } from '@irl-impostor/shared';
 import Countdown from '../components/Countdown';
 import SabotagePuzzleCard from '../components/SabotagePuzzleCard';
+import { downscaleImageToDataUrl } from '../utils/image';
 
 const ROOM_LABELS: Record<RoomType, string> = {
   kitchen: 'Kitchen',
@@ -21,8 +22,38 @@ export default function Game() {
   const [spotDraft, setSpotDraft] = useState('');
   const [protecting, setProtecting] = useState(false);
   const [shooting, setShooting] = useState(false);
+  const [submittingPhoto, setSubmittingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const commonTask = game.myTasks.find((t) => t.common) ?? null;
+  const photoProofEnabled = room.settings.photoProofEnabled;
+
+  function handleCommonTaskClick() {
+    if (!commonTask || commonTask.done || submittingPhoto) return;
+    if (photoProofEnabled) {
+      photoInputRef.current?.click();
+    } else {
+      game.completeTask(commonTask.taskId);
+    }
+  }
+
+  async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !commonTask) return;
+    setSubmittingPhoto(true);
+    setPhotoError(null);
+    try {
+      const dataUrl = await downscaleImageToDataUrl(file);
+      const res = await game.submitTaskPhoto(commonTask.taskId, dataUrl);
+      if (!res.ok) setPhotoError(res.error ?? 'Could not submit the photo.');
+    } catch {
+      setPhotoError('Could not process that photo.');
+    } finally {
+      setSubmittingPhoto(false);
+    }
+  }
 
   const grouped = useMemo(() => {
     const map = new Map<RoomType, typeof game.myTasks>();
@@ -200,14 +231,30 @@ export default function Game() {
           <span className="task-room">Everyone's task</span>
           <button
             className={`task-item ${commonTask.done ? 'done' : ''}`}
-            disabled={commonTask.done}
-            onClick={() => game.completeTask(commonTask.taskId)}
+            disabled={commonTask.done || submittingPhoto}
+            onClick={handleCommonTaskClick}
             style={{ textAlign: 'left', width: '100%', cursor: commonTask.done ? 'default' : 'pointer' }}
           >
             <span className={`task-check ${commonTask.done ? 'checked' : ''}`}>{commonTask.done ? '✓' : ''}</span>
-            <span style={{ flex: 1 }}>{commonTask.text}</span>
+            <span style={{ flex: 1 }}>{submittingPhoto ? 'Uploading photo…' : commonTask.text}</span>
             {commonTask.visual && <span className="badge">Visual</span>}
+            {photoProofEnabled && !commonTask.done && <span className="badge">📷 Photo</span>}
           </button>
+          {photoError && (
+            <p className="error-text" style={{ margin: 0 }}>
+              {photoError}
+            </p>
+          )}
+          {photoProofEnabled && (
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: 'none' }}
+              onChange={handlePhotoSelected}
+            />
+          )}
         </div>
       )}
 

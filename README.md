@@ -20,7 +20,11 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    equivalent, e.g. grab a square of toilet paper and hold it up),
    and tasks are tagged **visual** when a bystander could actually
    watch you do them, both real Among Us mechanics for catching an
-   impostor who's clearly never done the thing.
+   impostor who's clearly never done the thing. The host can turn on
+   **photo proof** for the common task specifically: instead of a tap,
+   everyone takes a quick photo to complete it, and the whole group
+   can flip through them on the end-of-game recap. Off by default,
+   and photos never leave the room's server memory beyond that round.
 6. Big moments come with a vibration + a short synthesized tone, so a
    phone face-down on the couch still gets your attention: a meeting
    being called, dying, a sabotage landing, and the game ending all buzz
@@ -221,31 +225,40 @@ a late joiner being dealt straight into the round as a crewmate
 turns that off, and win tallies accumulating correctly across two
 rounds in the same room.
 
+`scripts/photoproof-test.mjs` (`npm run test:photoproof`) covers photo
+proof for the common task: a plain tap-to-complete is rejected once
+it's on, a photo for the wrong task or an oversized one is rejected,
+a real submission completes the task and shows up for everyone via
+`get_task_photos`, and the photos clear on the next round.
+
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count
 (scales with player count), the meeting spot (required to start),
 custom tasks, whether the Judge / Guardian Angel / Sheriff / Engineer
-roles are in play, and whether latecomers play immediately or spectate
-(this one can also be flipped mid-game). Everything else (meeting
-timers, the vent window, kill cooldown, meeting limit/cooldown, game
-clock length, sabotage charges/cooldown/penalty, room idle cleanup)
-lives in `server/src/constants.ts`.
+roles are in play, whether latecomers play immediately or spectate
+(this one can also be flipped mid-game), and whether the common task
+requires photo proof. Everything else (meeting timers, the vent
+window, kill cooldown, meeting limit/cooldown, game clock length,
+sabotage charges/cooldown/penalty, the photo size cap, room idle
+cleanup) lives in `server/src/constants.ts`.
 
 ## MVP scope
 
 Implemented: room creation/join, secret role + unique task assignment
-(plus a shared common task, visual-task tagging, and host-defined
-custom tasks), a live shared task-progress bar, kill + blackout vent,
-a shared game clock with a scarce-charge sabotage unscramble puzzle,
-meetings with a synced timer and vote, four optional roles (Judge, Guardian Angel,
-Sheriff, Engineer), sound + haptic feedback for the game's key
-moments, an end-of-game recap (tasks done, match length, final roles,
-win tallies), a persistent per-room scoreboard across rounds, host
-controls (kick, transfer host, toggling whether mid-round joiners play
+(plus a shared common task with optional photo proof, visual-task
+tagging, and host-defined custom tasks), a live shared task-progress
+bar, kill + blackout vent (with a round-start grace period before the
+first kill), a shared game clock with a scarce-charge sabotage
+unscramble puzzle, meetings with a synced timer and vote, four
+optional roles (Judge, Guardian Angel, Sheriff, Engineer), sound +
+haptic feedback for the game's key moments, an end-of-game recap
+(tasks done, match length, final roles, win tallies, task-proof
+photos), a persistent per-room scoreboard across rounds, host controls
+(kick, transfer host, toggling whether mid-round joiners play
 immediately or spectate), win conditions, reconnect-on-refresh, a PWA
-manifest, and a Dockerfile + `fly.toml` for deploying it somewhere
-reachable.
+manifest, and a Dockerfile + `fly.toml`/`render.yaml` for deploying it
+somewhere reachable.
 
 Not implemented yet (see the project spec for the full list): ads,
 accounts, themed/preset task packs beyond free-typed custom tasks.

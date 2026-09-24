@@ -72,6 +72,15 @@ export interface RoomSettings {
   customTasks: string[];
   /** If true (default), anyone who joins after a round has started gets dropped in as a crewmate immediately instead of spectating. */
   lateJoinersPlayNow: boolean;
+  /** If true, completing the shared common task requires a photo instead of just a tap. Off by default. */
+  photoProofEnabled: boolean;
+}
+
+/** A submitted common-task photo, fetched on demand for the end-of-game recap rather than broadcast to everyone. */
+export interface TaskPhoto {
+  playerId: string;
+  playerName: string;
+  photoDataUrl: string;
 }
 
 export interface MeetingVoteTally {
@@ -210,6 +219,13 @@ export interface ClientToServerEvents {
     payload: { wordIndex: 0 | 1; guess: string },
     cb: (res: { ok: boolean }) => void
   ) => void;
+  /** Completes the common task with a photo attached, when photoProofEnabled is on. */
+  submit_task_photo: (
+    payload: { taskId: string; photoDataUrl: string },
+    cb: (res: { ok: boolean; error?: string }) => void
+  ) => void;
+  /** Fetches all submitted common-task photos for this room, for the end-of-game recap. */
+  get_task_photos: (cb: (res: { photos: TaskPhoto[] }) => void) => void;
   /** The Judge's one-time vote overrule. */
   judge_overrule: (payload: { targetId: string }) => void;
   /** The Guardian Angel's one-time shield. */

@@ -31,3 +31,8 @@ export const SABOTAGE_EXTRA_DRAIN_RATE = 0.5;
 export const SABOTAGE_DRAIN_TICK_MS = 500;
 
 export const ROOM_IDLE_CLEANUP_MS = 4 * 60 * 60 * 1000; // sweep rooms idle for 4h
+
+// Task-proof photos are downscaled client-side before they're sent, but this
+// caps how much of a data URL string the server will hold per photo, so a
+// stray oversized upload can't balloon a room's in-memory footprint.
+export const MAX_TASK_PHOTO_CHARS = 500_000;

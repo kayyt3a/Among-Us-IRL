@@ -63,6 +63,7 @@ export interface GameRoomState {
   engineerEnabled: boolean;
   customTasks: string[];
   lateJoinersPlayNow: boolean;
+  photoProofEnabled: boolean;
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;
@@ -90,4 +91,6 @@ export interface GameRoomState {
   wins: Map<string, number>;
   /** This round's shared common task, kept around so a late joiner can be dealt the same one. */
   commonTask: Task | null;
+  /** Submitted common-task photos for this round, playerId -> a downscaled JPEG data URL. */
+  commonTaskPhotos: Map<string, string>;
 }

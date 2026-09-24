@@ -239,6 +239,23 @@ export default function Lobby() {
               {settings.lateJoinersPlayNow ? 'ON' : 'OFF'}
             </button>
           </div>
+          <div className="row">
+            <div>
+              <span className="subtitle" style={{ display: 'block' }}>
+                Photo proof for the shared task
+              </span>
+              <span className="subtitle" style={{ fontSize: 12 }}>
+                Everyone snaps a photo to complete it, shown to the group at the end
+              </span>
+            </div>
+            <div className="spacer" />
+            <button
+              className={`btn btn-sm ${settings.photoProofEnabled ? 'btn-primary' : ''}`}
+              onClick={() => game.updateSettings({ photoProofEnabled: !settings.photoProofEnabled })}
+            >
+              {settings.photoProofEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
         </div>
       ) : (
         <p className="subtitle center">Waiting for the host to start the game…</p>

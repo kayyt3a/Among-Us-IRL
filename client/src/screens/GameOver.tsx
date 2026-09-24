@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import type { TaskPhoto } from '@irl-impostor/shared';
 import { useGame } from '../state/GameProvider';
 
 function formatDuration(ms: number): string {
@@ -11,6 +13,20 @@ export default function GameOver() {
   const game = useGame();
   const info = game.gameOver!;
   const crewWon = info.winner === 'crewmates';
+  const photoProofEnabled = game.room?.settings.photoProofEnabled ?? false;
+  const [photos, setPhotos] = useState<TaskPhoto[] | null>(null);
+
+  useEffect(() => {
+    if (!photoProofEnabled) return;
+    let cancelled = false;
+    game.fetchTaskPhotos().then((res) => {
+      if (!cancelled) setPhotos(res);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoProofEnabled]);
 
   return (
     <div className="app-shell stack">
@@ -60,6 +76,29 @@ export default function GameOver() {
           );
         })}
       </div>
+
+      {photoProofEnabled && photos && photos.length > 0 && (
+        <div className="card stack">
+          <h3>Task proof</h3>
+          <p className="subtitle" style={{ margin: 0 }}>
+            Everyone's photo for the shared task
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {photos.map((p) => (
+              <div key={p.playerId} className="stack" style={{ gap: 4 }}>
+                <img
+                  src={p.photoDataUrl}
+                  alt={`${p.playerName}'s task proof`}
+                  style={{ width: '100%', borderRadius: 12, display: 'block' }}
+                />
+                <span className="subtitle" style={{ fontSize: 12, textAlign: 'center' }}>
+                  {p.playerName}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="spacer" />
 

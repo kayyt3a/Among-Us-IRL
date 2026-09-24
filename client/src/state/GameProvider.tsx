@@ -10,6 +10,7 @@ import type {
   RoomSettings,
   RoomStateSummary,
   SpecialRole,
+  TaskPhoto,
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
 import { playProximityTone, requestMicPermission, scanForTone } from '../audio/proximity';
@@ -232,6 +233,8 @@ interface GameApi extends State {
   triggerVent: () => void;
   triggerSabotage: () => void;
   submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) => Promise<boolean>;
+  submitTaskPhoto: (taskId: string, photoDataUrl: string) => Promise<{ ok: boolean; error?: string }>;
+  fetchTaskPhotos: () => Promise<TaskPhoto[]>;
   judgeOverrule: (targetId: string) => void;
   guardianProtect: (targetId: string) => void;
   sheriffShoot: (targetId: string) => void;
@@ -503,6 +506,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
       submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) =>
         new Promise<boolean>((resolve) => {
           socket.emit('submit_unscramble', { wordIndex, guess }, (res) => resolve(res.ok));
+        }),
+      submitTaskPhoto: (taskId: string, photoDataUrl: string) =>
+        new Promise((resolve) => {
+          socket.emit('submit_task_photo', { taskId, photoDataUrl }, (res) => {
+            if (res.ok) dispatch({ type: 'task_local_done', taskId });
+            resolve(res);
+          });
+        }),
+      fetchTaskPhotos: () =>
+        new Promise((resolve) => {
+          socket.emit('get_task_photos', (res) => resolve(res.photos));
         }),
       judgeOverrule: (targetId: string) => {
         dispatch({ type: 'special_role_used' });

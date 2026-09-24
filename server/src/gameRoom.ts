@@ -25,6 +25,7 @@ import {
   GAME_DURATION_MS,
   KILL_COOLDOWN_MS,
   MAX_MEETINGS_PER_PLAYER,
+  MAX_TASK_PHOTO_CHARS,
   MEETING_COOLDOWN_MS,
   MEETING_DISCUSSION_MS,
   MEETING_VOTING_MS,
@@ -70,6 +71,7 @@ export class GameRoom {
       engineerEnabled: false,
       customTasks: [],
       lateJoinersPlayNow: true,
+      photoProofEnabled: false,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -91,6 +93,7 @@ export class GameRoom {
       gameStartedAt: null,
       wins: new Map(),
       commonTask: null,
+      commonTaskPhotos: new Map(),
     };
   }
 
@@ -169,6 +172,7 @@ export class GameRoom {
     }
     if (partial.sheriffEnabled !== undefined) this.state.sheriffEnabled = partial.sheriffEnabled;
     if (partial.engineerEnabled !== undefined) this.state.engineerEnabled = partial.engineerEnabled;
+    if (partial.photoProofEnabled !== undefined) this.state.photoProofEnabled = partial.photoProofEnabled;
     if (partial.customTasks !== undefined) {
       this.state.customTasks = partial.customTasks
         .map((t) => t.trim().slice(0, MAX_CUSTOM_TASK_LENGTH))
@@ -223,6 +227,7 @@ export class GameRoom {
     const pool = shuffle(taskPool).slice(0, Math.min(neededTasks, taskPool.length));
     const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
     this.state.commonTask = commonTask;
+    this.state.commonTaskPhotos = new Map();
 
     let cursor = 0;
     const result = new Map<string, PrivateInfo>();
@@ -324,9 +329,42 @@ export class GameRoom {
     if (!player) return false;
     const task = player.tasks.find((t) => t.taskId === taskId);
     if (!task) return false;
+    // When photo proof is on, the common task can only be completed via
+    // submitTaskPhoto, not this plain tap-to-complete path.
+    if (task.common && this.state.photoProofEnabled) return false;
     task.done = true;
     this.touch();
     return true;
+  }
+
+  /** Completes the common task with a photo attached, when photoProofEnabled is on. */
+  submitTaskPhoto(
+    playerId: string,
+    taskId: string,
+    photoDataUrl: string
+  ): { ok: true } | { ok: false; error: string } {
+    const player = this.state.players.get(playerId);
+    if (!player) return { ok: false, error: 'Player not found.' };
+    const task = player.tasks.find((t) => t.taskId === taskId);
+    if (!task || !task.common) {
+      return { ok: false, error: 'Photo proof is only for the shared task.' };
+    }
+    if (photoDataUrl.length > MAX_TASK_PHOTO_CHARS) {
+      return { ok: false, error: 'Photo is too large.' };
+    }
+    task.done = true;
+    this.state.commonTaskPhotos.set(playerId, photoDataUrl);
+    this.touch();
+    return { ok: true };
+  }
+
+  /** All submitted common-task photos this round, for the end-of-game recap. */
+  getTaskPhotos(): { playerId: string; playerName: string; photoDataUrl: string }[] {
+    return Array.from(this.state.commonTaskPhotos.entries()).map(([playerId, photoDataUrl]) => ({
+      playerId,
+      playerName: this.state.players.get(playerId)?.name ?? 'Unknown',
+      photoDataUrl,
+    }));
   }
 
   private validateKill(
@@ -886,6 +924,7 @@ export class GameRoom {
     this.state.protectedPlayerId = null;
     this.state.gameStartedAt = null;
     this.state.commonTask = null;
+    this.state.commonTaskPhotos = new Map();
     this.touch();
   }
 
@@ -1004,6 +1043,7 @@ export class GameRoom {
         engineerEnabled: this.state.engineerEnabled,
         customTasks: this.state.customTasks,
         lateJoinersPlayNow: this.state.lateJoinersPlayNow,
+        photoProofEnabled: this.state.photoProofEnabled,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)

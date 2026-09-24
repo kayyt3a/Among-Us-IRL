@@ -497,6 +497,32 @@ io.on('connection', (socket) => {
     broadcastRoomUpdate(room);
   });
 
+  socket.on('submit_task_photo', ({ taskId, photoDataUrl }, cb) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return cb({ ok: false });
+    const { room, playerId } = ctx;
+    const res = room.submitTaskPhoto(playerId, taskId, photoDataUrl);
+    if (!res.ok) {
+      cb({ ok: false, error: res.error });
+      return;
+    }
+    cb({ ok: true });
+    socket.emit('task_ack', { taskId });
+    broadcastRoomUpdate(room);
+    const winner = room.checkWinConditions();
+    if (winner) {
+      clearGameClockTimer(room.state.code);
+      io.to(room.state.code).emit('game_over', winner);
+      broadcastRoomUpdate(room);
+    }
+  });
+
+  socket.on('get_task_photos', (cb) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return cb({ photos: [] });
+    cb({ photos: ctx.room.getTaskPhotos() });
+  });
+
   socket.on('call_meeting', ({ reason }) => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
