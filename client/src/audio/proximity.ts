@@ -1,13 +1,13 @@
 // Audio proximity handshake: the killer's phone plays a short near-ultrasonic
 // tone through its speaker, and the target's phone listens for it via the
 // mic. If the target hears the exact tone the server assigned to this
-// attempt, the two phones are close enough together that the sound carried
-// — a physical proximity check that needs no pairing, Bluetooth, or GPS.
+// attempt, the two phones are close enough together that the sound carried.
+// A physical proximity check that needs no pairing, Bluetooth, or GPS.
 //
 // This is inherently a bit fuzzy: cheap speakers/mics roll off near 18-19kHz,
 // party noise raises the detection floor, and iOS audio processing varies by
 // device. It's tuned to be reasonably reliable at "same room, few feet apart"
-// range, not laboratory-precise — callers should always offer an honor-code
+// range, not laboratory-precise, so callers should always offer an honor-code
 // fallback for when it fails.
 
 type AudioContextCtor = typeof AudioContext;

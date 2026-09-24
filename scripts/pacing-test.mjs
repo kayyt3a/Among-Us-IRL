@@ -182,7 +182,7 @@ async function testCommonTaskAndPacing() {
   );
 
   // Resolve the meeting: wait for voting, everyone still alive votes skip.
-  // Only victim1 actually died — victim2's kill was rejected by cooldown above,
+  // Only victim1 actually died. victim2's kill was rejected by cooldown above,
   // so they're still alive and still need to vote for allAliveHaveVoted() to fire.
   await waitFor(sockets[callerIdx], 'meeting_phase_changed', 65000);
   const stillAlive = crewIdxs.filter((i) => i !== victim1).concat([impostorIdx]);

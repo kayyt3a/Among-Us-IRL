@@ -139,13 +139,13 @@ export default function Game() {
           {!isImpostor && game.mySpecialRole && (
             <p style={{ margin: '6px 0 0', fontSize: 13 }}>
               {game.mySpecialRole === 'judge' &&
-                "You're the Judge — during a vote you can overrule the result once."}
+                "You're the Judge. During a vote you can overrule the result once."}
               {game.mySpecialRole === 'guardian-angel' &&
-                "You're the Guardian Angel — once you die, you can shield a living player once."}
+                "You're the Guardian Angel. Once you die, you can shield a living player once."}
               {game.mySpecialRole === 'sheriff' &&
-                "You're the Sheriff — you can shoot a suspect once. Guess wrong and you're eliminated instead."}
+                "You're the Sheriff. You can shoot a suspect once, and guessing wrong gets you eliminated instead."}
               {game.mySpecialRole === 'engineer' &&
-                "You're the Engineer — you can trigger a decoy blackout vent once, for misdirection."}
+                "You're the Engineer. You can trigger a decoy blackout vent once, for misdirection."}
             </p>
           )}
         </div>
@@ -301,7 +301,7 @@ export default function Game() {
           style={{ top: 0, bottom: 'auto', position: 'fixed', maxHeight: '80dvh', overflowY: 'auto' }}
         >
           <h3>Shield who from the next kill?</h3>
-          <p className="subtitle">You only get to do this once — choose carefully.</p>
+          <p className="subtitle">You only get to do this once, so choose carefully.</p>
           <div className="stack">
             {protectTargets.map((p) => (
               <button
@@ -355,7 +355,7 @@ export default function Game() {
             <h3 style={{ margin: 0 }}>Verifying you're close to {game.killAttempt.targetName}…</h3>
             <p className="subtitle">
               {game.killAttempt.status === 'listening'
-                ? 'Playing a quiet tone — stay near them and keep this screen open.'
+                ? 'Playing a quiet tone. Stay near them and keep this screen open.'
                 : 'Starting…'}
             </p>
             <button className="btn btn-ghost btn-block" onClick={game.cancelKillAttempt}>

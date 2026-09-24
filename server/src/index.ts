@@ -113,16 +113,16 @@ function scheduleGameClock(room: GameRoom) {
 /**
  * While a sabotage puzzle is unsolved, ticks the accelerated clock drain and
  * rebroadcasts the room so every screen visibly counts down faster. Stops
- * itself the moment the puzzle clears or the round is no longer playing —
- * callers don't need to remember to clear it on every win path.
+ * itself the moment the puzzle clears or the round is no longer playing.
+ * Callers don't need to remember to clear it on every win path.
  */
 function startSabotageDrainTimer(room: GameRoom) {
   const code = room.state.code;
   clearSabotageDrainTimer(code);
   let lastTick = Date.now();
   const timer = setInterval(() => {
-    // Keeps draining through a meeting (extra pressure to hurry up and vote) —
-    // only actually stops once the puzzle's solved or the round has ended outright.
+    // Keeps draining through a meeting (extra pressure to hurry up and vote).
+    // Only actually stops once the puzzle's solved or the round has ended outright.
     if (!room.state.sabotagePuzzle || room.state.phase === 'ended') {
       clearSabotageDrainTimer(code);
       return;
@@ -403,7 +403,7 @@ io.on('connection', (socket) => {
       if (room.clearKillAttempt(playerId)) {
         socket.emit('kill_attempt_result', {
           ok: false,
-          reason: "Couldn't verify — get closer and try again.",
+          reason: "Couldn't verify. Get closer and try again.",
         });
       }
     }, res.windowMs + 500);
@@ -574,7 +574,7 @@ io.on('connection', (socket) => {
     if (res.misfired) {
       socket.emit('ability_result', {
         ok: false,
-        message: 'You shot an innocent crewmate — you were eliminated.',
+        message: 'You shot an innocent crewmate. You were eliminated.',
       });
       socket.emit('you_died');
     } else {

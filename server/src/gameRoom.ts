@@ -144,7 +144,7 @@ export class GameRoom {
 
   updateSettings(partial: Partial<RoomSettings>) {
     // The meeting spot is just a label, not something that affects role/task
-    // assignment, so the host can change it any time — including mid-game, if
+    // assignment, so the host can change it any time, including mid-game if
     // the agreed spot stops working out.
     if (partial.meetingSpot !== undefined) {
       this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
@@ -197,7 +197,7 @@ export class GameRoom {
     const impostorIds = new Set(ids.slice(0, this.state.impostorCount));
     const crewmateIds = this.state.playerOrder.filter((id) => !impostorIds.has(id));
 
-    // Each special role, when enabled, goes to a distinct crewmate — falling back to
+    // Each special role, when enabled, goes to a distinct crewmate, falling back to
     // reusing the pool only if there aren't enough crewmates to go around.
     const assigned = new Set<string>();
     const pickSpecial = (enabled: boolean): string | null => {
@@ -317,7 +317,7 @@ export class GameRoom {
   }
 
   completeTask(playerId: string, taskId: string): boolean {
-    // Ghosts keep working their list — a dead crewmate's unfinished tasks
+    // Ghosts keep working their list. A dead crewmate's unfinished tasks
     // still block the crew's task-completion win, same as real Among Us.
     const player = this.state.players.get(playerId);
     if (!player) return false;
@@ -346,8 +346,8 @@ export class GameRoom {
     if (targetId === this.state.protectedPlayerId) {
       this.state.protectedPlayerId = null;
       this.touch();
-      // Deliberately the same generic message as any other invalid target —
-      // the impostor should never be able to tell a shield apart from a
+      // Deliberately the same generic message as any other invalid target.
+      // The impostor should never be able to tell a shield apart from a
       // wrong guess.
       return { ok: false, error: 'Invalid target.', reason: 'shield' };
     }
@@ -462,7 +462,7 @@ export class GameRoom {
   /**
    * Spends a sabotage charge to start the unscramble minigame: two scrambled
    * words the whole room can see. While either stays unsolved the shared
-   * clock drains at 1.5x — solving both stops it and starts the cooldown.
+   * clock drains at 1.5x. Solving both stops it and starts the cooldown.
    */
   triggerSabotage(
     playerId: string
@@ -728,7 +728,7 @@ export class GameRoom {
   /**
    * The Sheriff's one-time shot at a suspected impostor. Hits the target if
    * they really are the impostor; an innocent guess kills the Sheriff
-   * instead. Resolves silently, like an impostor's kill — the body is only
+   * instead. Resolves silently, like an impostor's kill: the body is only
    * noticed later, never announced.
    */
   sheriffShoot(
@@ -773,7 +773,7 @@ export class GameRoom {
     return { ok: true, eliminatedId, eliminatedRole, misfired, winner };
   }
 
-  /** The Engineer's one-time decoy blackout vent — identical to a real vent, for misdirection. */
+  /** The Engineer's one-time decoy blackout vent, identical to a real vent, for misdirection. */
   engineerFakeVent(playerId: string): { ok: true } | { ok: false; error: string } {
     const player = this.state.players.get(playerId);
     if (!player || player.status !== 'alive' || this.state.engineerId !== playerId) {
@@ -799,7 +799,7 @@ export class GameRoom {
     this.touch();
   }
 
-  /** Credits a win to every player on the winning side, dead or alive — same as real Among Us. */
+  /** Credits a win to every player on the winning side, dead or alive, same as real Among Us. */
   private recordWin(winner: 'crewmates' | 'impostors') {
     for (const id of this.state.playerOrder) {
       const p = this.state.players.get(id)!;
@@ -822,7 +822,7 @@ export class GameRoom {
     } else if (impostorsAlive >= crewmatesAlive) {
       winner = 'impostors';
     } else {
-      // Every crewmate's tasks — dead or alive — have to be done; a ghost's
+      // Every crewmate's tasks have to be done, dead or alive; a ghost's
       // unfinished list still blocks the win, same as real Among Us.
       const allCrewmates = this.allCrewmates;
       const crewmatesDoneWithTasks =
@@ -892,7 +892,7 @@ export class GameRoom {
    * A player joining after the round has already started, when the host has
    * left late joiners on "play now": dealt straight in as a crewmate with a
    * fresh task list (plus the round's shared common task), never an
-   * impostor and never a special role — those were only ever fair to
+   * impostor and never a special role, since those were only ever fair to
    * assign at the original startGame().
    */
   addLateJoinerAsCrewmate(name: string): { player: ServerPlayer; info: PrivateInfo } {
@@ -933,7 +933,7 @@ export class GameRoom {
     const host = this.state.players.get(hostId);
     if (!host?.isHost) return { ok: false, error: 'Only the host can do that.' };
     if (this.state.phase !== 'lobby') return { ok: false, error: 'Can only remove players in the lobby.' };
-    if (targetId === hostId) return { ok: false, error: "You can't remove yourself — leave instead." };
+    if (targetId === hostId) return { ok: false, error: "You can't remove yourself. Leave instead." };
     const target = this.state.players.get(targetId);
     if (!target) return { ok: false, error: 'Player not found.' };
 
@@ -1029,7 +1029,7 @@ export class GameRoom {
     };
   }
 
-  /** Aggregate crew task completion — same info the classic Among Us task bar shows everyone. */
+  /** Aggregate crew task completion, same info the classic Among Us task bar shows everyone. */
   private crewTaskProgress(): { done: number; total: number } {
     const allCrew = this.allCrewmates;
     return {

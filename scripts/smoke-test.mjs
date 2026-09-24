@@ -112,7 +112,7 @@ async function main() {
   const gameOver = await gameOverPromise;
   console.log('game over:', gameOver.winner, gameOver.players);
   console.log(
-    'recap stats — tasks:',
+    'recap stats, tasks:',
     `${gameOver.tasksCompleted}/${gameOver.tasksTotal}`,
     'duration ms:',
     gameOver.durationMs

@@ -56,7 +56,7 @@ function WordRow({ index, scrambled, solved }: { index: 0 | 1; scrambled: string
       </div>
       {wrong && (
         <p className="error-text" style={{ margin: 0 }}>
-          Not quite — try again.
+          Not quite, try again.
         </p>
       )}
     </div>
@@ -66,9 +66,9 @@ function WordRow({ index, scrambled, solved }: { index: 0 | 1; scrambled: string
 export default function SabotagePuzzleCard({ puzzle }: { puzzle: SabotagePuzzle }) {
   return (
     <div className="card stack" style={{ borderColor: 'var(--bad)' }}>
-      <h3 style={{ margin: 0 }}>⚠ Sabotage — unscramble both words!</h3>
+      <h3 style={{ margin: 0 }}>⚠ Sabotage: unscramble both words!</h3>
       <p className="subtitle" style={{ margin: 0 }}>
-        The clock is draining fast while this is up. Anyone can guess — solve both to stop it.
+        The clock is draining fast while this is up. Anyone can guess, and solving both stops it.
       </p>
       <WordRow index={0} scrambled={puzzle.scrambled[0]} solved={puzzle.solved[0]} />
       <WordRow index={1} scrambled={puzzle.scrambled[1]} solved={puzzle.solved[1]} />

@@ -10,7 +10,7 @@ export interface Task {
   id: string;
   room: RoomType;
   text: string;
-  /** A visual task is something a bystander could actually see you do — a stronger alibi. */
+  /** A visual task is something a bystander could actually see you do, a stronger alibi. */
   visual: boolean;
 }
 
@@ -39,7 +39,7 @@ export interface PublicPlayer {
   isHost: boolean;
   /** Only meaningful once game has ended or player is revealed. */
   status: PlayerStatus;
-  /** Joined mid-round — watching this round, will play from the next one. */
+  /** Joined mid-round, watching this round. Will play from the next one. */
   isSpectator: boolean;
   /** Rounds this player has won in this room, across the whole session. */
   wins: number;
@@ -102,7 +102,7 @@ export interface MeetingResult {
   judgeMisfired?: boolean;
 }
 
-/** The live sabotage minigame — two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
+/** The live sabotage minigame: two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
 export interface SabotagePuzzle {
   scrambled: [string, string];
   solved: [boolean, boolean];
@@ -126,9 +126,9 @@ export interface RoomStateSummary {
   meeting: MeetingState | null;
   ventAvailable: boolean;
   ventEndsAt: number | null;
-  /** The shared game clock — when it runs out, the impostors win by default. Null before the game starts. */
+  /** The shared game clock. When it runs out, the impostors win by default. Null before the game starts. */
   gameEndsAt: number | null;
-  /** Aggregate crew task completion, visible to everyone (including the impostor) — same info the classic task bar gives. */
+  /** Aggregate crew task completion, visible to everyone (including the impostor), same info the classic task bar gives. */
   crewTaskProgress: { done: number; total: number };
   /** The active sabotage puzzle, if any. Null when no sabotage is in progress. */
   sabotagePuzzle: SabotagePuzzle | null;
@@ -189,7 +189,7 @@ export interface ClientToServerEvents {
   update_settings: (payload: Partial<RoomSettings>) => void;
   start_game: () => void;
   complete_task: (payload: { taskId: string }) => void;
-  /** Honor-code instant kill — no proximity check. Used as the fallback when the audio handshake fails or is unavailable. */
+  /** Honor-code instant kill, no proximity check. Used as the fallback when the audio handshake fails or is unavailable. */
   kill_player: (payload: { targetId: string }) => void;
   /** Starts a proximity-verified kill attempt on a target. */
   attempt_kill: (payload: { targetId: string }) => void;
@@ -212,7 +212,7 @@ export interface ClientToServerEvents {
   judge_overrule: (payload: { targetId: string }) => void;
   /** The Guardian Angel's one-time shield. */
   guardian_protect: (payload: { targetId: string }) => void;
-  /** The Sheriff's one-time shot — hits the impostor, or backfires and kills the Sheriff. */
+  /** The Sheriff's one-time shot. Hits the impostor, or backfires and kills the Sheriff. */
   sheriff_shoot: (payload: { targetId: string }) => void;
   /** The Engineer's one-time decoy blackout vent. */
   engineer_vent: () => void;

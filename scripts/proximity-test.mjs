@@ -53,7 +53,7 @@ async function main() {
   sockets.forEach((s) => s.emit('report_mic_status', { available: true }));
   await wait(100);
 
-  // --- Test 1: happy path — target hears the correct tone ---
+  // --- Test 1: happy path, target hears the correct tone ---
   console.log('\n--- Test 1: correct tone confirms the kill ---');
   const listenStartP = waitFor(sockets[impA], 'kill_listen_start');
   sockets[impA].emit('attempt_kill', { targetId: playerIds[targetA] });
@@ -77,7 +77,7 @@ async function main() {
   const wrongFreq = listenStart2.frequencyHz === 17600 ? 18600 : 17600;
   sockets[targetB].emit('tone_detected', { frequencyHz: wrongFreq });
   await wait(300);
-  console.log('sent mismatched frequency', wrongFreq, '(expected', listenStart2.frequencyHz, ') — waiting for timeout...');
+  console.log('sent mismatched frequency', wrongFreq, '(expected', listenStart2.frequencyHz, '), waiting for timeout...');
   const timeoutResultP = waitFor(sockets[impB], 'kill_attempt_result', listenStart2.windowMs + 3000);
   const timeoutResult = await timeoutResultP;
   console.log('kill_attempt_result:', timeoutResult);

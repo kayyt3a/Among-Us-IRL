@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../state/GameProvider';
 
 const MAX_CUSTOM_TASKS = 20;
+const MEETING_SPOT_DEBOUNCE_MS = 400;
 
 export default function Lobby() {
   const game = useGame();
@@ -9,6 +10,27 @@ export default function Lobby() {
   const settings = room.settings;
   const maxImpostors = Math.max(1, Math.floor(room.players.length / 3));
   const [customDraft, setCustomDraft] = useState('');
+
+  // The input below is edited locally and only synced from the server when
+  // it's not focused. Binding it straight to settings.meetingSpot and
+  // emitting on every keystroke made fast typing lose characters: the
+  // update for an earlier keystroke would round-trip back and overwrite
+  // whatever had been typed since.
+  const [spotDraft, setSpotDraft] = useState(settings.meetingSpot);
+  const spotFocused = useRef(false);
+  const spotDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    if (!spotFocused.current) setSpotDraft(settings.meetingSpot);
+  }, [settings.meetingSpot]);
+
+  function handleSpotChange(value: string) {
+    setSpotDraft(value);
+    if (spotDebounce.current) clearTimeout(spotDebounce.current);
+    spotDebounce.current = setTimeout(() => {
+      game.updateSettings({ meetingSpot: value });
+    }, MEETING_SPOT_DEBOUNCE_MS);
+  }
 
   function addCustomTask() {
     const text = customDraft.trim();
@@ -65,16 +87,24 @@ export default function Lobby() {
       <div className="card stack">
         <h3>Meeting spot</h3>
         <p className="subtitle">
-          Everyone agrees on one real spot in the house — the couch, the kitchen table — and
-          heads there the moment a meeting is called.
+          Everyone agrees on one real spot in the house, like the couch or the kitchen table,
+          and heads there the moment a meeting is called.
         </p>
         {game.isHost ? (
           <input
             className="field"
             placeholder="e.g. Living room couch"
-            value={settings.meetingSpot}
+            value={spotDraft}
             maxLength={40}
-            onChange={(e) => game.updateSettings({ meetingSpot: e.target.value })}
+            onFocus={() => {
+              spotFocused.current = true;
+            }}
+            onBlur={() => {
+              spotFocused.current = false;
+              if (spotDebounce.current) clearTimeout(spotDebounce.current);
+              game.updateSettings({ meetingSpot: spotDraft });
+            }}
+            onChange={(e) => handleSpotChange(e.target.value)}
           />
         ) : (
           <p style={{ margin: 0, fontWeight: 700 }}>
@@ -130,7 +160,7 @@ export default function Lobby() {
                 Judge
               </span>
               <span className="subtitle" style={{ fontSize: 12 }}>
-                One crewmate can force-eject once — wrong guess ejects them instead
+                One crewmate can force-eject once. Guess wrong and they get ejected instead
               </span>
             </div>
             <div className="spacer" />
@@ -164,7 +194,7 @@ export default function Lobby() {
                 Sheriff
               </span>
               <span className="subtitle" style={{ fontSize: 12 }}>
-                One crewmate can shoot a suspect once — an innocent guess kills the Sheriff instead
+                One crewmate can shoot a suspect once. An innocent guess kills the Sheriff instead
               </span>
             </div>
             <div className="spacer" />
@@ -217,7 +247,7 @@ export default function Lobby() {
       <div className="card stack">
         <h3>Custom tasks</h3>
         <p className="subtitle">
-          Add your own tasks — mixed in with the built-in pool for everyone. Optional.
+          Add your own tasks, mixed in with the built-in pool for everyone. Optional.
         </p>
         {game.isHost && (
           <div className="row">
@@ -240,7 +270,7 @@ export default function Lobby() {
         )}
         {settings.customTasks.length === 0 ? (
           <p className="subtitle" style={{ margin: 0 }}>
-            None yet — just the built-in task pools.
+            None yet, just the built-in task pools.
           </p>
         ) : (
           <div className="stack" style={{ gap: 6 }}>

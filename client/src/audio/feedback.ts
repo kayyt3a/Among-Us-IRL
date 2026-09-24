@@ -1,4 +1,4 @@
-// Sound + haptic cues for moments that matter physically — this is a game
+// Sound + haptic cues for moments that matter physically. This is a game
 // played away from the screen, so a meeting call or a death needs to reach
 // someone whose phone is face-down on the couch, not just show up as text.
 
@@ -8,7 +8,7 @@ export function vibrate(pattern: number | number[]) {
   try {
     navigator.vibrate?.(pattern);
   } catch {
-    // unsupported browser — silently do nothing
+    // unsupported browser, do nothing
   }
 }
 
@@ -90,18 +90,18 @@ export function alertGameOver(won: boolean) {
   }
 }
 
-/** A short, quiet buzz confirming a kill/shot landed — for the killer's own screen only. */
+/** A short, quiet buzz confirming a kill/shot landed. For the killer's own screen only. */
 export function bumpKillConfirmed() {
   vibrate(60);
 }
 
-/** A quick, bright ding — one of the two sabotage words was just solved. */
+/** A quick, bright ding for when one of the two sabotage words gets solved. */
 export function alertSabotageWordSolved() {
   vibrate(40);
   playSequence([{ freq: 900, at: 0, dur: 0.08 }]);
 }
 
-/** Relief cue — both words solved, the accelerated drain just stopped. */
+/** Relief cue for when both words are solved and the accelerated drain stops. */
 export function alertSabotageStopped() {
   vibrate([80, 50, 80]);
   playSequence([

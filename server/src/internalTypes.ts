@@ -28,7 +28,7 @@ export interface ServerPlayer {
   meetingsCalled: number;
   /** Set after a kill; this player (as killer) can't attempt another until then. */
   killCooldownUntil: number;
-  /** Joined mid-round — watching this round, becomes a normal player again next round. */
+  /** Joined mid-round, watching this round. Becomes a normal player again next round. */
   isSpectator: boolean;
 }
 

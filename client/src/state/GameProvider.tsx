@@ -217,7 +217,7 @@ interface GameApi extends State {
   kickPlayer: (targetId: string) => void;
   transferHost: (targetId: string) => void;
   completeTask: (taskId: string) => void;
-  /** Honor-code instant kill, no proximity check — the manual fallback. */
+  /** Honor-code instant kill, no proximity check. The manual fallback. */
   killPlayer: (targetId: string) => void;
   /** Proximity-verified kill attempt via the audio handshake. */
   attemptKill: (targetId: string, targetName: string) => void;

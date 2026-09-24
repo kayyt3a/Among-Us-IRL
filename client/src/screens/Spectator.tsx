@@ -16,7 +16,7 @@ export default function Spectator() {
         <div style={{ fontSize: 48 }}>👀</div>
         <h1 className="title">You're spectating this round</h1>
         <p className="subtitle">
-          You joined after the round started, so you're just watching for now — you'll play from
+          You joined after the round started, so you're just watching for now. You'll play from
           the next round on.
         </p>
       </div>

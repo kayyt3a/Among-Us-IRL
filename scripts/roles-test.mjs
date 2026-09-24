@@ -51,7 +51,7 @@ async function testCustomTasksAndSheriffHit() {
   console.log('=== Room A: custom tasks + Sheriff correctly shoots the impostor ===');
   // 12 players * 8 tasks/player = 96 needed slots, which is >= the 92-task pool
   // (90 built-in + 2 custom), so the assignment cycle is guaranteed to touch
-  // every pool entry at least once — including both custom tasks — instead of
+  // every pool entry at least once, including both custom tasks, instead of
   // leaving it to chance which slice of the shuffled pool gets used.
   const g = await makeRoom(
     ['Host', 'Alice', 'Bob', 'Cara', 'Dan', 'Erin', 'Frank', 'Gina', 'Hank', 'Ivy', 'Jack', 'Kim'],

@@ -35,7 +35,7 @@ export default function MeetingResultOverlay() {
             <p className="subtitle">
               {judgeMisfired ? (
                 <>
-                  {eliminatedName} wasn't the impostor — the Judge is ejected instead.
+                  {eliminatedName} wasn't the impostor, so the Judge is ejected instead.
                 </>
               ) : (
                 <>

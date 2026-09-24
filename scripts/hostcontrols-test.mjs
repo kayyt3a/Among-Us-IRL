@@ -30,7 +30,7 @@ async function main() {
   const createRes = await new Promise((resolve) => sockets[0].emit('create_room', { name: names[0] }, resolve));
   const code = createRes.code;
   const playerIds = [createRes.playerId];
-  // Straggler (index 5) joins later, after round 1 has started — everyone else joins now.
+  // Straggler (index 5) joins later, after round 1 has started. Everyone else joins now.
   for (let i = 1; i < 5; i++) {
     const res = await new Promise((resolve) => sockets[i].emit('join_room', { code, name: names[i] }, resolve));
     playerIds.push(res.playerId);
@@ -103,7 +103,7 @@ async function main() {
   const round1WinTotal = [...winsAfterRound1.values()].reduce((a, b) => a + b, 0);
   // 4 players, impostorCount 1 => 3 crewmates get credited, the 1 impostor doesn't.
   assert(round1WinTotal === 3, `3 crewmates credited with a win after round 1 (got ${round1WinTotal})`);
-  assert((winsAfterRound1.get(stragglerId) ?? 0) === 0, "Straggler wasn't credited a win — they only spectated");
+  assert((winsAfterRound1.get(stragglerId) ?? 0) === 0, "Straggler wasn't credited a win, they only spectated");
 
   console.log('\n=== Round 2: Straggler plays as a normal player; win tallies accumulate ===');
   sockets[1].emit('play_again');
@@ -119,7 +119,7 @@ async function main() {
   assert(latestRoom.settings.lateJoinersPlayNow === true, 'lateJoinersPlayNow back on for round 2');
 
   // Dan was kicked back in the lobby, so this room is Host, Alice, Bob, Cara, Straggler = 5
-  // players. maxImpostors for 5 players is still 1, so this stays a 1-impostor round —
+  // players. maxImpostors for 5 players is still 1, so this stays a 1-impostor round,
   // finishing it the same way as round 1 (task completion) avoids the 45s kill cooldown
   // entirely, keeping the test fast regardless of who the impostor landed on this time.
   const round2Sockets = [sockets[0], sockets[1], sockets[2], sockets[3], straggler];
@@ -148,7 +148,7 @@ async function main() {
   await wait(150);
   assert(
     latestRoom.players.find((p) => p.id === lateJoinRes.playerId)?.isSpectator === false,
-    'LateJoiner2 is not marked a spectator — they are playing this round'
+    'LateJoiner2 is not marked a spectator, they are playing this round'
   );
   round2Sockets.push(lateJoiner2);
   round2Started[round2Sockets.length - 1] = lateJoiner2Info;

@@ -1,4 +1,4 @@
-# Render Blueprint — lets you deploy this repo with "New > Blueprint" in the
+# Render Blueprint. Lets you deploy this repo with "New > Blueprint" in the
 # Render dashboard instead of clicking through every field by hand. Builds
 # from the same Dockerfile used for local/Fly.io deploys.
 services:
