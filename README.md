@@ -11,10 +11,12 @@ play. No accounts, no app install, no QR codes or Bluetooth.
 3. The host starts the game. Roles are assigned secretly per device:
    most players are **crewmates**, one or two are **impostors**.
 4. Every crewmate gets a personal task list pulled from room-tagged pools
-   (kitchen, bathroom, living room, bedroom, outdoor, anywhere), and no task
-   repeats within a session. The impostor gets an identical-looking but
-   fake task list. The host can also type in their own **custom tasks**
-   before starting, mixed into the pool alongside the built-in ones.
+   (kitchen, bathroom, living room, bedroom, outdoor, anywhere; 25 tasks
+   per room), and no task repeats within a session. The impostor gets an
+   identical-looking but fake task list. The host can also type in their
+   own **custom tasks** before starting; those are always guaranteed a
+   spot in that round's pool (space permitting) so they reliably show up
+   instead of getting crowded out by the built-in variety.
 5. Tasks are completed on the honor system, just tap "Done". Every
    player also gets one shared **common task** (the "swipe card"
    equivalent, e.g. grab a square of toilet paper and hold it up),
@@ -73,7 +75,10 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     kill, once; the **Sheriff** can shoot a suspect once at any time
     during play (an innocent guess eliminates the Sheriff instead);
     the **Engineer** can trigger a decoy blackout vent once, to throw
-    suspicion around even though they're not the impostor.
+    suspicion around even though they're not the impostor. Whoever gets
+    one shows a clear colored badge on their role screen (and the Judge
+    sees it again right on the vote screen) so it's never buried in fine
+    print.
 13. The game ends when all impostors are caught, the impostors
     outnumber (or equal) the remaining crewmates, every crewmate's
     tasks are done (ghosts keep working their list, and an unfinished

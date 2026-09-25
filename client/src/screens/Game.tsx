@@ -3,6 +3,7 @@ import { useGame } from '../state/GameProvider';
 import type { RoomType } from '@irl-impostor/shared';
 import Countdown from '../components/Countdown';
 import SabotagePuzzleCard from '../components/SabotagePuzzleCard';
+import SpecialRoleBadge from '../components/SpecialRoleBadge';
 import { downscaleImageToDataUrl } from '../utils/image';
 
 const ROOM_LABELS: Record<RoomType, string> = {
@@ -102,7 +103,7 @@ export default function Game() {
             Time left
           </p>
           <div style={{ fontSize: 26 }}>
-            <Countdown endsAt={room.gameEndsAt} />
+            <Countdown endsAt={room.gameEndsAt} urgentBelowMs={30_000} />
           </div>
         </div>
       )}
@@ -169,16 +170,21 @@ export default function Game() {
             </p>
           )}
           {!isImpostor && game.mySpecialRole && (
-            <p style={{ margin: '6px 0 0', fontSize: 13 }}>
-              {game.mySpecialRole === 'judge' &&
-                "You're the Judge. During a vote you can overrule the result once."}
-              {game.mySpecialRole === 'guardian-angel' &&
-                "You're the Guardian Angel. Once you die, you can shield a living player once."}
-              {game.mySpecialRole === 'sheriff' &&
-                "You're the Sheriff. You can shoot a suspect once, and guessing wrong gets you eliminated instead."}
-              {game.mySpecialRole === 'engineer' &&
-                "You're the Engineer. You can trigger a decoy blackout vent once, for misdirection."}
-            </p>
+            <>
+              <div>
+                <SpecialRoleBadge role={game.mySpecialRole} />
+              </div>
+              <p style={{ margin: '8px 0 0', fontSize: 13 }}>
+                {game.mySpecialRole === 'judge' &&
+                  'During a vote you can overrule the result once.'}
+                {game.mySpecialRole === 'guardian-angel' &&
+                  'Once you die, you can shield a living player once.'}
+                {game.mySpecialRole === 'sheriff' &&
+                  'You can shoot a suspect once, and guessing wrong gets you eliminated instead.'}
+                {game.mySpecialRole === 'engineer' &&
+                  'You can trigger a decoy blackout vent once, for misdirection.'}
+              </p>
+            </>
           )}
         </div>
       )}

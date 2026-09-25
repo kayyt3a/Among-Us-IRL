@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useGame } from '../state/GameProvider';
 import Countdown from '../components/Countdown';
 import SabotagePuzzleCard from '../components/SabotagePuzzleCard';
+import SpecialRoleBadge from '../components/SpecialRoleBadge';
 
 export default function Meeting() {
   const game = useGame();
@@ -90,9 +91,12 @@ export default function Meeting() {
           )}
 
           {canOverrule && (
-            <button className="btn btn-outline btn-block" onClick={() => setOverruling(true)}>
-              Overrule the vote (Judge)
-            </button>
+            <div className="stack center">
+              <SpecialRoleBadge role="judge" />
+              <button className="btn btn-outline btn-block" onClick={() => setOverruling(true)}>
+                Overrule the vote
+              </button>
+            </div>
           )}
         </>
       )}

@@ -222,9 +222,14 @@ export class GameRoom {
     this.state.sheriffId = sheriffId;
     this.state.engineerId = engineerId;
 
-    const taskPool = ALL_TASKS.concat(buildCustomTasks(this.state.customTasks));
+    // Host-typed custom tasks are guaranteed a slot (up to capacity), then the
+    // rest of the pool is filled with a random slice of the built-in tasks,
+    // so a host's own tasks reliably show up even though the built-in pool is
+    // much bigger than any single round's task count.
+    const customTaskList = buildCustomTasks(this.state.customTasks);
     const neededTasks = this.state.playerOrder.length * this.state.tasksPerPlayer;
-    const pool = shuffle(taskPool).slice(0, Math.min(neededTasks, taskPool.length));
+    const builtInNeeded = Math.max(0, neededTasks - customTaskList.length);
+    const pool = shuffle(customTaskList.concat(shuffle(ALL_TASKS).slice(0, builtInNeeded)));
     const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
     this.state.commonTask = commonTask;
     this.state.commonTaskPhotos = new Map();

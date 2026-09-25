@@ -7,7 +7,13 @@ function format(msLeft: number): string {
   return `${m}:${rem.toString().padStart(2, '0')}`;
 }
 
-export default function Countdown({ endsAt }: { endsAt: number }) {
+export default function Countdown({
+  endsAt,
+  urgentBelowMs = 10_000,
+}: {
+  endsAt: number;
+  urgentBelowMs?: number;
+}) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -15,5 +21,8 @@ export default function Countdown({ endsAt }: { endsAt: number }) {
     return () => clearInterval(id);
   }, []);
 
-  return <span className="timer">{format(endsAt - now)}</span>;
+  const msLeft = endsAt - now;
+  const urgent = msLeft > 0 && msLeft <= urgentBelowMs;
+
+  return <span className={`timer${urgent ? ' timer-urgent' : ''}`}>{format(msLeft)}</span>;
 }
