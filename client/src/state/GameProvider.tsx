@@ -255,6 +255,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const killToneStopRef = useRef<(() => void) | null>(null);
+  const prevPhaseRef = useRef<string | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -426,9 +427,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (state.room?.phase === 'lobby' && (state.myRole || state.gameOver)) {
+    const phase = state.room?.phase ?? null;
+    // A round just starting can briefly render with the new role applied
+    // before the room's own phase flips from 'lobby' to 'playing' (two
+    // separate socket events, two separate renders). Only reset on a real
+    // transition INTO lobby (i.e. after a round actually ended), not just
+    // because phase still happens to read 'lobby' from before start_game.
+    const cameFromElsewhere = prevPhaseRef.current !== null && prevPhaseRef.current !== 'lobby';
+    if (phase === 'lobby' && cameFromElsewhere && (state.myRole || state.gameOver)) {
       dispatch({ type: 'reset_round' });
     }
+    prevPhaseRef.current = phase;
   }, [state.room?.phase, state.myRole, state.gameOver]);
 
   useEffect(() => {
