@@ -63,10 +63,7 @@ async function main() {
   const ack = await waitFor(sockets[crewIdx], 'task_ack');
   console.log('task ack ok:', ack.taskId === state.tasks[crewIdx][0].taskId);
 
-  // impostors can't kill for the first 45s of a round; wait that out
-  console.log('waiting out the round-start kill delay (~45s)...');
-  await wait(45500);
-
+  // Kill and vent are both available immediately at round start, no wait needed.
   // impostor kills another crewmate
   const victimIdx = Object.entries(state.roles).find(
     ([idx, r]) => r === 'crewmate' && idx !== crewIdx
@@ -78,9 +75,7 @@ async function main() {
   await victimDied;
   console.log('victim received you_died: pass');
 
-  // vent should be available now
-  await wait(100);
-  console.log('vent available on public state:', latestRoom.ventAvailable);
+  // vent is independent of the kill, and was already available from round start
   const ventPromises = sockets.map((s) => waitFor(s, 'vent_triggered'));
   sockets[impostorIdx].emit('trigger_vent');
   await Promise.all(ventPromises);

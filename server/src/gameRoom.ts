@@ -34,7 +34,7 @@ import {
   SABOTAGE_COOLDOWN_MS,
   SABOTAGE_EXTRA_DRAIN_RATE,
   SABOTAGE_MAX_USES,
-  VENT_WINDOW_MS,
+  VENT_COOLDOWN_MS,
 } from './constants';
 import { GameRoomState, ServerPlayer } from './internalTypes';
 
@@ -76,7 +76,6 @@ export class GameRoom {
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
-      ventAvailableUntil: 0,
       meetingTimer: null,
       winner: null,
       pendingKill: null,
@@ -118,6 +117,7 @@ export class GameRoom {
       specialRoleUsed: false,
       meetingsCalled: 0,
       killCooldownUntil: 0,
+      ventCooldownUntil: 0,
       isSpectator,
     };
     this.state.players.set(id, player);
@@ -278,8 +278,10 @@ export class GameRoom {
                 : null;
       player.specialRoleUsed = false;
       player.meetingsCalled = 0;
-      // No instant kills the moment roles are dealt, everyone needs a chance to spread out first.
-      player.killCooldownUntil = role === 'impostor' ? now + KILL_COOLDOWN_MS : 0;
+      // Kill and vent are both available the moment roles are dealt; each only
+      // goes on cooldown after its own first use this round.
+      player.killCooldownUntil = 0;
+      player.ventCooldownUntil = 0;
 
       const fellowImpostors =
         role === 'impostor' && impostorIds.size > 1
@@ -407,7 +409,6 @@ export class GameRoom {
     const target = this.state.players.get(targetId)!;
     target.status = 'dead';
     killer.killCooldownUntil = Date.now() + KILL_COOLDOWN_MS;
-    this.state.ventAvailableUntil = Date.now() + VENT_WINDOW_MS;
     this.touch();
     return this.checkWinConditions();
   }
@@ -494,15 +495,18 @@ export class GameRoom {
     return false;
   }
 
-  isVentAvailable(): boolean {
-    return Date.now() < this.state.ventAvailableUntil;
+  /** Each impostor has their own vent cooldown, independent of kill. */
+  isVentAvailable(playerId: string): boolean {
+    const player = this.state.players.get(playerId);
+    if (!player || player.role !== 'impostor' || player.status !== 'alive') return false;
+    return Date.now() >= player.ventCooldownUntil;
   }
 
   triggerVent(playerId: string): boolean {
     const player = this.state.players.get(playerId);
     if (!player || player.role !== 'impostor' || player.status !== 'alive') return false;
-    if (!this.isVentAvailable()) return false;
-    this.state.ventAvailableUntil = 0;
+    if (Date.now() < player.ventCooldownUntil) return false;
+    player.ventCooldownUntil = Date.now() + VENT_COOLDOWN_MS;
     this.touch();
     return true;
   }
@@ -912,12 +916,12 @@ export class GameRoom {
       p.specialRoleUsed = false;
       p.meetingsCalled = 0;
       p.killCooldownUntil = 0;
+      p.ventCooldownUntil = 0;
       // Anyone who joined mid-round as a spectator is a full player from here on.
       p.isSpectator = false;
     }
     this.state.phase = 'lobby';
     this.state.meeting = null;
-    this.state.ventAvailableUntil = 0;
     this.state.winner = null;
     this.state.pendingKill = null;
     this.state.nextMeetingAvailableAt = 0;
@@ -1069,8 +1073,6 @@ export class GameRoom {
           wins: this.state.wins.get(p.id) ?? 0,
         })),
       meeting: this.publicMeeting(),
-      ventAvailable: this.isVentAvailable(),
-      ventEndsAt: this.state.ventAvailableUntil || null,
       gameEndsAt: this.state.gameEndsAt,
       crewTaskProgress: this.crewTaskProgress(),
       sabotagePuzzle: this.state.sabotagePuzzle

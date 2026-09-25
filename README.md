@@ -37,9 +37,11 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    classic Among Us task bar gives, useful for the crew to gauge urgency
    and for the impostor to bluff and time sabotage without it ever
    revealing who personally is behind.
-8. Impostors can't kill for the first 45 seconds of a round, and there's
-   the same 45-second cooldown between kills, so it's never instant or
-   back-to-back. Once it's ready, the impostor eliminates nearby players
+8. Kill and Vent are both available to the impostor from the moment
+   roles are dealt, no waiting around. Each has its own 45-second
+   cooldown that only starts after its own first use, so back-to-back
+   kills (or back-to-back vents) still can't happen, but using one
+   doesn't lock out the other. The impostor eliminates nearby players
    by tapping **Eliminate** and picking a target. Proximity is verified
    with an audio handshake: the impostor's phone plays a short
    near-ultrasonic tone (Web Audio), and the target's phone silently
@@ -50,15 +52,16 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    check can't confirm within ~8s (party noise, a cheap speaker, a
    locked screen), it falls back to an honor-code "Eliminate anyway"
    button so a bad mic can never soft-lock a kill.
-9. After a kill, the impostor has a short window to trigger **Vent**: a
-   full-screen blackout broadcast to every device at once, so no one can
-   use screen state to tell who's alive, dead, or the impostor. The
-   impostor's screen always shows a live status card for Eliminate, Vent,
-   and Sabotage, whichever's on cooldown counts down in real time, so
-   there's never a guessing game about when a tool comes back. Their role
-   banner also has a one-tap **Hide** toggle that collapses it to a
-   neutral "Role hidden" bar, for anyone worried about a shoulder-surfer
-   catching an "You are the Impostor" screen.
+9. **Vent** triggers a full-screen blackout broadcast to every device at
+   once, so no one can use screen state to tell who's alive, dead, or
+   the impostor. It's a standalone tool the impostor can use any time,
+   not just right after a kill. The impostor's screen always shows a
+   live status card for Eliminate, Vent, and Sabotage, whichever's on
+   cooldown counts down in real time, so there's never a guessing game
+   about when a tool comes back. Their role banner also has a one-tap
+   **Hide** toggle that collapses it to a neutral "Role hidden" bar, for
+   anyone worried about a shoulder-surfer catching an "You are the
+   Impostor" screen.
 10. Before starting, the host sets a **meeting spot**, a real place in
     the house (the couch, the kitchen table). Anyone can **call a
     meeting** at any time; every device shows "Everyone return to
@@ -208,8 +211,10 @@ It takes about a minute to run since it waits out the real meeting
 discussion timer.
 
 `scripts/pacing-test.mjs` covers the newer mechanics specifically:
-common-task assignment, the per-killer kill cooldown, the Guardian
-Angel shield blocking a kill, the sabotage unscramble puzzle (charge
+common-task assignment, the per-killer kill cooldown, vent being
+available independently of kill (with its own cooldown after use),
+the Guardian Angel shield blocking a kill, the sabotage unscramble
+puzzle (charge
 count, the ~1.5x accelerated clock drain while unsolved, solving it
 with two different players, and the cooldown afterward), and the
 per-player meeting limit + cooldown. Run it the same way
@@ -250,8 +255,8 @@ Host-adjustable in the lobby: tasks per player (3–8), impostor count
 custom tasks, whether the Judge / Guardian Angel / Sheriff / Engineer
 roles are in play, whether latecomers play immediately or spectate
 (this one can also be flipped mid-game), and whether every task
-requires photo proof. Everything else (meeting timers, the vent
-window, kill cooldown, meeting limit/cooldown, game clock length,
+requires photo proof. Everything else (meeting timers, the vent and
+kill cooldowns, meeting limit/cooldown, game clock length,
 sabotage charges/cooldown/penalty, the photo size cap, room idle
 cleanup) lives in `server/src/constants.ts`.
 
@@ -260,8 +265,9 @@ cleanup) lives in `server/src/constants.ts`.
 Implemented: room creation/join, secret role + unique task assignment
 (plus a shared common task, optional photo proof for every task,
 visual-task tagging, and host-defined custom tasks), a live shared task-progress
-bar, kill + blackout vent (with a round-start grace period before the
-first kill), a shared game clock with a scarce-charge sabotage
+bar, kill + a standalone blackout vent (both available from round
+start, each with its own independent cooldown after first use), a
+shared game clock with a scarce-charge sabotage
 unscramble puzzle, meetings with a synced timer and vote, four
 optional roles (Judge, Guardian Angel, Sheriff, Engineer), sound +
 haptic feedback for the game's key moments, an end-of-game recap

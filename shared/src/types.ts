@@ -136,8 +136,6 @@ export interface RoomStateSummary {
   settings: RoomSettings;
   players: PublicPlayer[];
   meeting: MeetingState | null;
-  ventAvailable: boolean;
-  ventEndsAt: number | null;
   /** The shared game clock. When it runs out, the impostors win by default. Null before the game starts. */
   gameEndsAt: number | null;
   /** Aggregate crew task completion, visible to everyone (including the impostor), same info the classic task bar gives. */
@@ -169,8 +167,10 @@ export interface ServerToClientEvents {
   error_message: (payload: { message: string }) => void;
   /** Impostor-only: current sabotage charges and when the next one is available. */
   sabotage_status: (payload: { usesRemaining: number; availableAt: number }) => void;
-  /** Impostor-only: when they're next allowed to kill (there's a delay at round start, then between kills). */
+  /** Impostor-only: when they're next allowed to kill. Available at round start, then a cooldown after each kill. */
   kill_status: (payload: { availableAt: number }) => void;
+  /** Impostor-only: when they're next allowed to vent. Available at round start, then a cooldown after each use. Independent of kill_status. */
+  vent_status: (payload: { availableAt: number }) => void;
   /** Broadcast to everyone the instant a sabotage lands, so the clock jump has a beat to it. */
   sabotage_triggered: () => void;
   /** Broadcast when either word in the active sabotage puzzle gets solved. */

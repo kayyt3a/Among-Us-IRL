@@ -29,6 +29,8 @@ export interface ServerPlayer {
   meetingsCalled: number;
   /** Set after a kill; this player (as killer) can't attempt another until then. */
   killCooldownUntil: number;
+  /** Set after using Vent; this player can't trigger it again until then. Independent of killCooldownUntil. */
+  ventCooldownUntil: number;
   /** Joined mid-round, watching this round. Becomes a normal player again next round. */
   isSpectator: boolean;
 }
@@ -68,7 +70,6 @@ export interface GameRoomState {
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;
-  ventAvailableUntil: number;
   meetingTimer: ReturnType<typeof setTimeout> | null;
   winner: 'crewmates' | 'impostors' | null;
   pendingKill: PendingKillAttempt | null;

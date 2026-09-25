@@ -82,6 +82,7 @@ export default function Game() {
   const sabotageReady =
     game.sabotageUsesRemaining > 0 && Date.now() >= game.sabotageAvailableAt && !room.sabotagePuzzle;
   const killReady = Date.now() >= game.killAvailableAt;
+  const ventReady = Date.now() >= game.ventAvailableAt;
   const canGuardianProtect =
     game.dead && game.mySpecialRole === 'guardian-angel' && !game.specialRoleUsed;
   const canSheriffShoot =
@@ -270,12 +271,12 @@ export default function Game() {
           <div className="row" style={{ gap: 8 }}>
             <span className="subtitle" style={{ margin: 0 }}>Vent</span>
             <div className="spacer" />
-            {room.ventAvailable && room.ventEndsAt ? (
-              <span className="timer" style={{ fontSize: 15 }}>
-                closes in <Countdown endsAt={room.ventEndsAt} />
-              </span>
+            {ventReady ? (
+              <span className="badge" style={{ color: 'var(--good)', borderColor: 'var(--good)' }}>Ready</span>
             ) : (
-              <span className="subtitle" style={{ margin: 0 }}>After a kill</span>
+              <span className="timer" style={{ fontSize: 15 }}>
+                <Countdown endsAt={game.ventAvailableAt} />
+              </span>
             )}
           </div>
           <div className="row" style={{ gap: 8 }}>
@@ -309,8 +310,8 @@ export default function Game() {
           >
             {killReady ? 'Eliminate' : 'Eliminate unavailable'}
           </button>
-          <button className="btn btn-block" disabled={!room.ventAvailable} onClick={game.triggerVent}>
-            {room.ventAvailable ? 'Vent (blackout)' : 'Vent unavailable'}
+          <button className="btn btn-block" disabled={!ventReady} onClick={game.triggerVent}>
+            {ventReady ? 'Vent (blackout)' : 'Vent unavailable'}
           </button>
           <button className="btn btn-block" disabled={!sabotageReady} onClick={game.triggerSabotage}>
             {sabotageReady ? `Sabotage (${game.sabotageUsesRemaining})` : 'Sabotage unavailable'}

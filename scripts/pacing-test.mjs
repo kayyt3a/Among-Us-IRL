@@ -85,8 +85,7 @@ async function testCommonTaskAndPacing() {
   assert(gaIdx !== undefined, 'a crewmate was assigned Guardian Angel');
   assert(judgeIdx !== gaIdx, 'Judge and Guardian Angel are different players');
 
-  console.log('--- Kill cooldown (waiting out the ~45s round-start kill delay first) ---');
-  await wait(45500);
+  console.log('--- Kill cooldown (kill is available immediately at round start) ---');
   const victim1 = crewIdxs.find((i) => i !== gaIdx);
   const killResult1 = await new Promise((resolve) => {
     sockets[impostorIdx].once('kill_result', resolve);
@@ -100,6 +99,18 @@ async function testCommonTaskAndPacing() {
     sockets[impostorIdx].emit('kill_player', { targetId: playerIds[victim2] });
   });
   assert(killResult2.ok === false, 'second immediate kill rejected by cooldown: ' + killResult2.message);
+
+  console.log('--- Vent is available at round start too, independent of the kill cooldown ---');
+  const ventPromise1 = waitFor(sockets[impostorIdx], 'vent_triggered');
+  sockets[impostorIdx].emit('trigger_vent');
+  await ventPromise1;
+  assert(true, 'vent triggers even though this impostor is still on kill cooldown');
+
+  let gotSecondVent = false;
+  sockets[impostorIdx].once('vent_triggered', () => { gotSecondVent = true; });
+  sockets[impostorIdx].emit('trigger_vent');
+  await wait(300);
+  assert(gotSecondVent === false, 'an immediate second vent is rejected by its own cooldown');
 
   console.log('--- guardian_protect rejected while Guardian Angel still alive ---');
   const protectWhileAliveResult = await new Promise((resolve) => {
@@ -235,8 +246,7 @@ async function testGuardianAngelShield() {
   const shieldTarget = crewIdxs.find((i) => i !== gaIdx);
   const otherTarget = crewIdxs.find((i) => i !== gaIdx && i !== shieldTarget);
 
-  console.log('--- Impostor A kills the Guardian Angel (waiting out the ~45s round-start kill delay) ---');
-  await wait(45500);
+  console.log('--- Impostor A kills the Guardian Angel ---');
   const gaDied = waitFor(sockets[gaIdx], 'you_died');
   sockets[impA].emit('kill_player', { targetId: playerIds[gaIdx] });
   await gaDied;

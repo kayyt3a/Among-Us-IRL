@@ -8,12 +8,12 @@ export const MAX_PLAYERS = 15;
 export const MEETING_DISCUSSION_MS = 60_000;
 export const MEETING_VOTING_MS = 30_000;
 
-export const VENT_WINDOW_MS = 20_000; // how long vent stays available after a kill
+// Vent and kill are both available the instant a round starts; each only
+// goes on cooldown after its own first use, independently of the other.
+export const VENT_COOLDOWN_MS = 45_000;
 export const VENT_DURATION_MS = 4_000; // how long the blackout lasts on every screen
 
-// How long a killer waits before they can strike: after each kill, and also
-// once at the very start of a round so the crew gets time to spread out.
-export const KILL_COOLDOWN_MS = 45_000;
+export const KILL_COOLDOWN_MS = 45_000; // cooldown between kills, per impostor
 
 export const MAX_MEETINGS_PER_PLAYER = 1; // emergency meetings each player gets per game
 export const MEETING_COOLDOWN_MS = 20_000; // how long after a meeting ends before another can be called

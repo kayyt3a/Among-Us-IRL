@@ -65,6 +65,7 @@ interface State {
   sabotageUsesRemaining: number;
   sabotageAvailableAt: number;
   killAvailableAt: number;
+  ventAvailableAt: number;
 }
 
 type Action =
@@ -89,6 +90,7 @@ type Action =
   | { type: 'kill_attempt_cancel' }
   | { type: 'sabotage_status'; usesRemaining: number; availableAt: number }
   | { type: 'kill_status'; availableAt: number }
+  | { type: 'vent_status'; availableAt: number }
   | { type: 'special_role_used' }
   | { type: 'kicked' };
 
@@ -112,6 +114,7 @@ const initialState: State = {
   sabotageUsesRemaining: 0,
   sabotageAvailableAt: 0,
   killAvailableAt: 0,
+  ventAvailableAt: 0,
 };
 
 function reducer(state: State, action: Action): State {
@@ -169,11 +172,14 @@ function reducer(state: State, action: Action): State {
         sabotageUsesRemaining: 0,
         sabotageAvailableAt: 0,
         killAvailableAt: 0,
+        ventAvailableAt: 0,
       };
     case 'sabotage_status':
       return { ...state, sabotageUsesRemaining: action.usesRemaining, sabotageAvailableAt: action.availableAt };
     case 'kill_status':
       return { ...state, killAvailableAt: action.availableAt };
+    case 'vent_status':
+      return { ...state, ventAvailableAt: action.availableAt };
     case 'special_role_used':
       return { ...state, specialRoleUsed: true };
     case 'kicked':
@@ -193,6 +199,7 @@ function reducer(state: State, action: Action): State {
         sabotageUsesRemaining: 0,
         sabotageAvailableAt: 0,
         killAvailableAt: 0,
+        ventAvailableAt: 0,
         error: 'You were removed from the room by the host.',
       };
     case 'kill_attempt_start':
@@ -358,6 +365,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     function onKillStatus(payload: { availableAt: number }) {
       dispatch({ type: 'kill_status', availableAt: payload.availableAt });
     }
+    function onVentStatus(payload: { availableAt: number }) {
+      dispatch({ type: 'vent_status', availableAt: payload.availableAt });
+    }
     function onSabotageTriggered() {
       alertSabotage();
       dispatch({ type: 'error', message: '⚠ Sabotage! Unscramble both words to stop it.' });
@@ -389,6 +399,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     socket.on('begin_proximity_scan', onBeginProximityScan);
     socket.on('sabotage_status', onSabotageStatus);
     socket.on('kill_status', onKillStatus);
+    socket.on('vent_status', onVentStatus);
     socket.on('sabotage_triggered', onSabotageTriggered);
     socket.on('sabotage_word_solved', onSabotageWordSolved);
     socket.on('sabotage_stopped', onSabotageStopped);
@@ -416,6 +427,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       socket.off('begin_proximity_scan', onBeginProximityScan);
       socket.off('sabotage_status', onSabotageStatus);
       socket.off('kill_status', onKillStatus);
+      socket.off('vent_status', onVentStatus);
       socket.off('sabotage_triggered', onSabotageTriggered);
       socket.off('sabotage_word_solved', onSabotageWordSolved);
       socket.off('sabotage_stopped', onSabotageStopped);

@@ -102,6 +102,18 @@ function sendKillStatusToAllImpostors(room: GameRoom) {
   for (const id of room.state.playerOrder) sendKillStatus(room, id);
 }
 
+/** Each impostor has their own vent cooldown too, independent of kill. */
+function sendVentStatus(room: GameRoom, playerId: string) {
+  const p = room.state.players.get(playerId);
+  if (p?.role === 'impostor' && p.socketId) {
+    io.to(p.socketId).emit('vent_status', { availableAt: p.ventCooldownUntil });
+  }
+}
+
+function sendVentStatusToAllImpostors(room: GameRoom) {
+  for (const id of room.state.playerOrder) sendVentStatus(room, id);
+}
+
 function notifyGuardianShieldUsed(room: GameRoom) {
   const guardian = room.state.guardianAngelId ? room.state.players.get(room.state.guardianAngelId) : null;
   if (guardian?.socketId) io.to(guardian.socketId).emit('guardian_protection_used');
@@ -295,6 +307,7 @@ io.on('connection', (socket) => {
           availableAt: room.state.sabotageAvailableAt,
         });
         socket.emit('kill_status', { availableAt: player.killCooldownUntil });
+        socket.emit('vent_status', { availableAt: player.ventCooldownUntil });
       }
     }
     if (room.state.meeting) {
@@ -334,6 +347,7 @@ io.on('connection', (socket) => {
     }
     sendSabotageStatus(room);
     sendKillStatusToAllImpostors(room);
+    sendVentStatusToAllImpostors(room);
     scheduleGameClock(room);
     broadcastRoomUpdate(room);
   });
@@ -459,6 +473,7 @@ io.on('connection', (socket) => {
     const { room, playerId } = ctx;
     if (room.triggerVent(playerId)) {
       io.to(room.state.code).emit('vent_triggered', { durationMs: VENT_DURATION_MS });
+      sendVentStatus(room, playerId);
       broadcastRoomUpdate(room);
     }
   });
