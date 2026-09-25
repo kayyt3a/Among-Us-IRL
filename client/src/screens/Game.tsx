@@ -162,11 +162,29 @@ export default function Game() {
         </div>
       ) : roleHidden ? (
         <button
-          className="card center"
+          className="card row"
           style={{ padding: 14, width: '100%', cursor: 'pointer', border: '1px dashed var(--border)' }}
           onClick={() => setRoleHidden(false)}
         >
-          <span className="subtitle" style={{ margin: 0 }}>🙈 Role hidden — tap to reveal</span>
+          <span className="subtitle" style={{ margin: 0 }}>Role hidden</span>
+          <div className="spacer" />
+          <span
+            aria-hidden="true"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16,
+              fontWeight: 800,
+              lineHeight: 1,
+            }}
+          >
+            +
+          </span>
         </button>
       ) : (
         <div className={`role-banner ${game.myRole ?? ''}`}>
@@ -175,8 +193,27 @@ export default function Game() {
               className="btn btn-ghost btn-sm"
               style={{ padding: '4px 10px', color: 'inherit' }}
               onClick={() => setRoleHidden(true)}
+              aria-label="Hide role"
             >
-              🙈 Hide
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'inline-flex',
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  border: '1px solid currentColor',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  marginRight: 4,
+                }}
+              >
+                −
+              </span>
+              Hide
             </button>
           </div>
           <h2 style={{ margin: 0 }}>{isImpostor ? 'You are the Impostor' : 'You are a Crewmate'}</h2>
