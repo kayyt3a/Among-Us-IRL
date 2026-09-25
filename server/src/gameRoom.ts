@@ -19,6 +19,7 @@ import {
   RoomStateSummary,
   scrambleWord,
   SpecialRole,
+  TaskPhoto,
 } from '@irl-impostor/shared';
 import {
   DEFAULT_TASKS_PER_PLAYER,
@@ -93,7 +94,7 @@ export class GameRoom {
       gameStartedAt: null,
       wins: new Map(),
       commonTask: null,
-      commonTaskPhotos: new Map(),
+      taskPhotos: new Map(),
     };
   }
 
@@ -232,7 +233,7 @@ export class GameRoom {
     const pool = shuffle(customTaskList.concat(shuffle(ALL_TASKS).slice(0, builtInNeeded)));
     const commonTask = COMMON_TASKS[Math.floor(Math.random() * COMMON_TASKS.length)];
     this.state.commonTask = commonTask;
-    this.state.commonTaskPhotos = new Map();
+    this.state.taskPhotos = new Map();
 
     let cursor = 0;
     const result = new Map<string, PrivateInfo>();
@@ -334,15 +335,15 @@ export class GameRoom {
     if (!player) return false;
     const task = player.tasks.find((t) => t.taskId === taskId);
     if (!task) return false;
-    // When photo proof is on, the common task can only be completed via
+    // When photo proof is on, every task can only be completed via
     // submitTaskPhoto, not this plain tap-to-complete path.
-    if (task.common && this.state.photoProofEnabled) return false;
+    if (this.state.photoProofEnabled) return false;
     task.done = true;
     this.touch();
     return true;
   }
 
-  /** Completes the common task with a photo attached, when photoProofEnabled is on. */
+  /** Completes a task with a photo attached, when photoProofEnabled is on. */
   submitTaskPhoto(
     playerId: string,
     taskId: string,
@@ -351,25 +352,28 @@ export class GameRoom {
     const player = this.state.players.get(playerId);
     if (!player) return { ok: false, error: 'Player not found.' };
     const task = player.tasks.find((t) => t.taskId === taskId);
-    if (!task || !task.common) {
-      return { ok: false, error: 'Photo proof is only for the shared task.' };
+    if (!task) {
+      return { ok: false, error: 'Task not found.' };
     }
     if (photoDataUrl.length > MAX_TASK_PHOTO_CHARS) {
       return { ok: false, error: 'Photo is too large.' };
     }
     task.done = true;
-    this.state.commonTaskPhotos.set(playerId, photoDataUrl);
+    this.state.taskPhotos.set(taskId, {
+      playerId,
+      playerName: player.name,
+      taskId,
+      taskText: task.text,
+      common: task.common,
+      photoDataUrl,
+    });
     this.touch();
     return { ok: true };
   }
 
-  /** All submitted common-task photos this round, for the end-of-game recap. */
-  getTaskPhotos(): { playerId: string; playerName: string; photoDataUrl: string }[] {
-    return Array.from(this.state.commonTaskPhotos.entries()).map(([playerId, photoDataUrl]) => ({
-      playerId,
-      playerName: this.state.players.get(playerId)?.name ?? 'Unknown',
-      photoDataUrl,
-    }));
+  /** Every submitted task photo this round, for the end-of-game recap. */
+  getTaskPhotos(): TaskPhoto[] {
+    return Array.from(this.state.taskPhotos.values());
   }
 
   private validateKill(
@@ -929,7 +933,7 @@ export class GameRoom {
     this.state.protectedPlayerId = null;
     this.state.gameStartedAt = null;
     this.state.commonTask = null;
-    this.state.commonTaskPhotos = new Map();
+    this.state.taskPhotos = new Map();
     this.touch();
   }
 

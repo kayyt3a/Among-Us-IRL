@@ -40,7 +40,7 @@ async function main() {
   }
   await wait(150);
 
-  console.log('=== Lobby: enable photo proof ===');
+  console.log('=== Lobby: enable photo proof (for every task now, not just the shared one) ===');
   sockets[0].emit('update_settings', { meetingSpot: 'Kitchen', photoProofEnabled: true, tasksPerPlayer: 3 });
   await wait(150);
   assert(latestRoom.settings.photoProofEnabled === true, 'photoProofEnabled reflected in room_update');
@@ -53,21 +53,30 @@ async function main() {
   await Promise.all(startPromises);
   await wait(150);
 
-  const commonTaskId0 = gameStarted[0].tasks.find((t) => t.common).taskId;
-  const individualTaskId0 = gameStarted[0].tasks.find((t) => !t.common).taskId;
+  const hostTasks = gameStarted[0].tasks;
+  const commonTaskId0 = hostTasks.find((t) => t.common).taskId;
+  const individualTaskIds0 = hostTasks.filter((t) => !t.common).map((t) => t.taskId);
+  assert(individualTaskIds0.length === 3, `Host has 3 individual tasks (got ${individualTaskIds0.length})`);
 
   console.log('--- Plain complete_task on the common task is rejected while photo proof is on ---');
   sockets[0].emit('complete_task', { taskId: commonTaskId0 });
   let gotAck = false;
   sockets[0].once('task_ack', () => { gotAck = true; });
   await wait(300);
-  assert(gotAck === false, 'no task_ack for a plain complete_task on the photo-proof common task');
+  assert(gotAck === false, 'no task_ack for a plain complete_task on the common task');
 
-  console.log('--- Photo for a non-common task is rejected ---');
-  const wrongTaskResult = await new Promise((resolve) =>
-    sockets[0].emit('submit_task_photo', { taskId: individualTaskId0, photoDataUrl: FAKE_PHOTO }, resolve)
+  console.log('--- Plain complete_task on an individual task is also rejected ---');
+  sockets[0].emit('complete_task', { taskId: individualTaskIds0[0] });
+  gotAck = false;
+  sockets[0].once('task_ack', () => { gotAck = true; });
+  await wait(300);
+  assert(gotAck === false, 'no task_ack for a plain complete_task on an individual task either');
+
+  console.log('--- Photo for a made-up taskId is rejected ---');
+  const bogusResult = await new Promise((resolve) =>
+    sockets[0].emit('submit_task_photo', { taskId: 'not-a-real-task', photoDataUrl: FAKE_PHOTO }, resolve)
   );
-  assert(wrongTaskResult.ok === false, 'photo rejected for a non-common task: ' + wrongTaskResult.error);
+  assert(bogusResult.ok === false, 'photo rejected for an unknown taskId: ' + bogusResult.error);
 
   console.log('--- Oversized photo is rejected ---');
   const hugePhoto = 'data:image/jpeg;base64,' + 'A'.repeat(600_000);
@@ -81,22 +90,33 @@ async function main() {
   const submitResult = await new Promise((resolve) =>
     sockets[0].emit('submit_task_photo', { taskId: commonTaskId0, photoDataUrl: FAKE_PHOTO }, resolve)
   );
-  assert(submitResult.ok === true, 'photo submission accepted');
+  assert(submitResult.ok === true, 'photo submission accepted for the common task');
   const ack = await ackPromise;
   assert(ack.taskId === commonTaskId0, 'task_ack received for the common task');
 
-  console.log('--- A second player also submits a photo ---');
+  console.log('--- Photo submissions complete every individual task too ---');
+  for (const taskId of individualTaskIds0) {
+    const res = await new Promise((resolve) =>
+      sockets[0].emit('submit_task_photo', { taskId, photoDataUrl: FAKE_PHOTO }, resolve)
+    );
+    assert(res.ok === true, `photo submission accepted for individual task ${taskId}`);
+  }
+
+  console.log('--- A second player also submits a photo for their common task ---');
   const commonTaskId1 = gameStarted[1].tasks.find((t) => t.common).taskId;
   const submitResult2 = await new Promise((resolve) =>
     sockets[1].emit('submit_task_photo', { taskId: commonTaskId1, photoDataUrl: FAKE_PHOTO }, resolve)
   );
   assert(submitResult2.ok === true, 'second player photo submission accepted');
 
-  console.log('--- get_task_photos returns both submitted photos ---');
+  console.log('--- get_task_photos returns every submitted photo, with per-task detail ---');
   const photosRes = await new Promise((resolve) => sockets[2].emit('get_task_photos', resolve));
-  assert(photosRes.photos.length === 2, `exactly 2 photos recorded (got ${photosRes.photos.length})`);
-  const byName = new Set(photosRes.photos.map((p) => p.playerName));
-  assert(byName.has('Host') && byName.has('Alice'), 'photos are attributed to the right players');
+  assert(photosRes.photos.length === 5, `exactly 5 photos recorded (Host x4 + Alice x1, got ${photosRes.photos.length})`);
+  const hostPhotos = photosRes.photos.filter((p) => p.playerName === 'Host');
+  assert(hostPhotos.length === 4, `Host has 4 photos recorded (got ${hostPhotos.length})`);
+  assert(hostPhotos.some((p) => p.common === true), 'one of Host\'s photos is flagged as the common task');
+  assert(hostPhotos.filter((p) => p.common === false).length === 3, 'the other 3 are flagged as individual tasks');
+  assert(hostPhotos.every((p) => typeof p.taskText === 'string' && p.taskText.length > 0), 'every photo carries its task text');
   assert(
     photosRes.photos.every((p) => p.photoDataUrl === FAKE_PHOTO),
     'photo data comes back unchanged'

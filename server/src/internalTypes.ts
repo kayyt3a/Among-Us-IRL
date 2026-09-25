@@ -7,6 +7,7 @@ import {
   MeetingPhase,
   SpecialRole,
   Task,
+  TaskPhoto,
 } from '@irl-impostor/shared';
 
 export interface ServerPlayer {
@@ -91,6 +92,6 @@ export interface GameRoomState {
   wins: Map<string, number>;
   /** This round's shared common task, kept around so a late joiner can be dealt the same one. */
   commonTask: Task | null;
-  /** Submitted common-task photos for this round, playerId -> a downscaled JPEG data URL. */
-  commonTaskPhotos: Map<string, string>;
+  /** Submitted task photos for this round, taskId -> the full record, for the end-of-game recap. */
+  taskPhotos: Map<string, TaskPhoto>;
 }

@@ -23,10 +23,11 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    and tasks are tagged **visual** when a bystander could actually
    watch you do them, both real Among Us mechanics for catching an
    impostor who's clearly never done the thing. The host can turn on
-   **photo proof** for the common task specifically: instead of a tap,
-   everyone takes a quick photo to complete it, and the whole group
-   can flip through them on the end-of-game recap. Off by default,
-   and photos never leave the room's server memory beyond that round.
+   **photo proof** for every task: instead of a tap, each one needs a
+   quick photo to complete, and the whole group can flip through every
+   photo, grouped by player, on the end-of-game recap, so if the
+   impostor loses they can check no one cheated. Off by default, and
+   photos never leave the room's server memory beyond that round.
 6. Big moments come with a vibration + a short synthesized tone, so a
    phone face-down on the couch still gets your attention: a meeting
    being called, dying, a sabotage landing, and the game ending all buzz
@@ -38,22 +39,26 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    revealing who personally is behind.
 8. Impostors can't kill for the first 45 seconds of a round, and there's
    the same 45-second cooldown between kills, so it's never instant or
-   back-to-back. The Eliminate button greys out with a live countdown
-   while it's on cooldown. Once it's ready, the impostor eliminates
-   nearby players by tapping **Eliminate** and picking a target.
-   Proximity is verified with an audio handshake: the
-   impostor's phone plays a short near-ultrasonic tone (Web Audio), and
-   the target's phone silently listens for it via the mic (`getUserMedia`
-   + an FFT analyser). If it hears the exact tone the server assigned
-   to that attempt, the two phones are close enough together and the
-   kill confirms. No pairing, Bluetooth, or GPS involved. If a phone's
-   mic is unavailable, or the check can't confirm within ~8s (party
-   noise, a cheap speaker, a locked screen), it falls back to an
-   honor-code "Eliminate anyway" button so a bad mic can never soft-lock
-   a kill.
+   back-to-back. Once it's ready, the impostor eliminates nearby players
+   by tapping **Eliminate** and picking a target. Proximity is verified
+   with an audio handshake: the impostor's phone plays a short
+   near-ultrasonic tone (Web Audio), and the target's phone silently
+   listens for it via the mic (`getUserMedia` + an FFT analyser). If it
+   hears the exact tone the server assigned to that attempt, the two
+   phones are close enough together and the kill confirms. No pairing,
+   Bluetooth, or GPS involved. If a phone's mic is unavailable, or the
+   check can't confirm within ~8s (party noise, a cheap speaker, a
+   locked screen), it falls back to an honor-code "Eliminate anyway"
+   button so a bad mic can never soft-lock a kill.
 9. After a kill, the impostor has a short window to trigger **Vent**: a
    full-screen blackout broadcast to every device at once, so no one can
-   use screen state to tell who's alive, dead, or the impostor.
+   use screen state to tell who's alive, dead, or the impostor. The
+   impostor's screen always shows a live status card for Eliminate, Vent,
+   and Sabotage, whichever's on cooldown counts down in real time, so
+   there's never a guessing game about when a tool comes back. Their role
+   banner also has a one-tap **Hide** toggle that collapses it to a
+   neutral "Role hidden" bar, for anyone worried about a shoulder-surfer
+   catching an "You are the Impostor" screen.
 10. Before starting, the host sets a **meeting spot**, a real place in
     the house (the couch, the kitchen table). Anyone can **call a
     meeting** at any time; every device shows "Everyone return to
@@ -231,10 +236,12 @@ turns that off, and win tallies accumulating correctly across two
 rounds in the same room.
 
 `scripts/photoproof-test.mjs` (`npm run test:photoproof`) covers photo
-proof for the common task: a plain tap-to-complete is rejected once
-it's on, a photo for the wrong task or an oversized one is rejected,
-a real submission completes the task and shows up for everyone via
-`get_task_photos`, and the photos clear on the next round.
+proof for every task: a plain tap-to-complete is rejected on both the
+common and individual tasks once it's on, a photo for a made-up task
+id or an oversized one is rejected, real submissions complete every
+task and show up for everyone via `get_task_photos` with per-task
+detail (whose, which task, common or not), and the photos clear on
+the next round.
 
 ## Configuration
 
@@ -242,7 +249,7 @@ Host-adjustable in the lobby: tasks per player (3–8), impostor count
 (scales with player count), the meeting spot (required to start),
 custom tasks, whether the Judge / Guardian Angel / Sheriff / Engineer
 roles are in play, whether latecomers play immediately or spectate
-(this one can also be flipped mid-game), and whether the common task
+(this one can also be flipped mid-game), and whether every task
 requires photo proof. Everything else (meeting timers, the vent
 window, kill cooldown, meeting limit/cooldown, game clock length,
 sabotage charges/cooldown/penalty, the photo size cap, room idle
@@ -251,8 +258,8 @@ cleanup) lives in `server/src/constants.ts`.
 ## MVP scope
 
 Implemented: room creation/join, secret role + unique task assignment
-(plus a shared common task with optional photo proof, visual-task
-tagging, and host-defined custom tasks), a live shared task-progress
+(plus a shared common task, optional photo proof for every task,
+visual-task tagging, and host-defined custom tasks), a live shared task-progress
 bar, kill + blackout vent (with a round-start grace period before the
 first kill), a shared game clock with a scarce-charge sabotage
 unscramble puzzle, meetings with a synced timer and vote, four

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { TaskPhoto } from '@irl-impostor/shared';
 import { useGame } from '../state/GameProvider';
 
@@ -27,6 +27,17 @@ export default function GameOver() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoProofEnabled]);
+
+  const photosByPlayer = useMemo(() => {
+    if (!photos) return [];
+    const map = new Map<string, { playerName: string; photos: TaskPhoto[] }>();
+    for (const p of photos) {
+      const entry = map.get(p.playerId) ?? { playerName: p.playerName, photos: [] };
+      entry.photos.push(p);
+      map.set(p.playerId, entry);
+    }
+    return Array.from(map.values());
+  }, [photos]);
 
   return (
     <div className="app-shell stack">
@@ -77,26 +88,33 @@ export default function GameOver() {
         })}
       </div>
 
-      {photoProofEnabled && photos && photos.length > 0 && (
+      {photoProofEnabled && photosByPlayer.length > 0 && (
         <div className="card stack">
           <h3>Task proof</h3>
           <p className="subtitle" style={{ margin: 0 }}>
-            Everyone's photo for the shared task
+            Every task photo, so you can check nobody skipped or faked a task
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {photos.map((p) => (
-              <div key={p.playerId} className="stack" style={{ gap: 4 }}>
-                <img
-                  src={p.photoDataUrl}
-                  alt={`${p.playerName}'s task proof`}
-                  style={{ width: '100%', borderRadius: 12, display: 'block' }}
-                />
-                <span className="subtitle" style={{ fontSize: 12, textAlign: 'center' }}>
-                  {p.playerName}
-                </span>
+          {photosByPlayer.map(({ playerName, photos: playerPhotos }) => (
+            <div key={playerName} className="stack" style={{ gap: 6 }}>
+              <span className="task-room">
+                {playerName} ({playerPhotos.length})
+              </span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {playerPhotos.map((p) => (
+                  <div key={p.taskId} className="stack" style={{ gap: 4 }}>
+                    <img
+                      src={p.photoDataUrl}
+                      alt={p.taskText}
+                      style={{ width: '100%', borderRadius: 12, display: 'block' }}
+                    />
+                    <span className="subtitle" style={{ fontSize: 11, textAlign: 'center' }}>
+                      {p.common ? "Everyone's task" : p.taskText}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 

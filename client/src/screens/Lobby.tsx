@@ -242,10 +242,10 @@ export default function Lobby() {
           <div className="row">
             <div>
               <span className="subtitle" style={{ display: 'block' }}>
-                Photo proof for the shared task
+                Photo proof for every task
               </span>
               <span className="subtitle" style={{ fontSize: 12 }}>
-                Everyone snaps a photo to complete it, shown to the group at the end
+                Every task needs a quick photo instead of a tap, so if the impostor loses they can check no one cheated
               </span>
             </div>
             <div className="spacer" />

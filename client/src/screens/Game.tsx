@@ -23,36 +23,41 @@ export default function Game() {
   const [spotDraft, setSpotDraft] = useState('');
   const [protecting, setProtecting] = useState(false);
   const [shooting, setShooting] = useState(false);
-  const [submittingPhoto, setSubmittingPhoto] = useState(false);
+  const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [roleHidden, setRoleHidden] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const commonTask = game.myTasks.find((t) => t.common) ?? null;
   const photoProofEnabled = room.settings.photoProofEnabled;
 
-  function handleCommonTaskClick() {
-    if (!commonTask || commonTask.done || submittingPhoto) return;
+  function handleTaskClick(taskId: string, done: boolean) {
+    if (done || uploadingTaskId) return;
     if (photoProofEnabled) {
+      setUploadingTaskId(taskId);
       photoInputRef.current?.click();
     } else {
-      game.completeTask(commonTask.taskId);
+      game.completeTask(taskId);
     }
   }
 
   async function handlePhotoSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !commonTask) return;
-    setSubmittingPhoto(true);
+    const taskId = uploadingTaskId;
+    if (!file || !taskId) {
+      setUploadingTaskId(null);
+      return;
+    }
     setPhotoError(null);
     try {
       const dataUrl = await downscaleImageToDataUrl(file);
-      const res = await game.submitTaskPhoto(commonTask.taskId, dataUrl);
+      const res = await game.submitTaskPhoto(taskId, dataUrl);
       if (!res.ok) setPhotoError(res.error ?? 'Could not submit the photo.');
     } catch {
       setPhotoError('Could not process that photo.');
     } finally {
-      setSubmittingPhoto(false);
+      setUploadingTaskId(null);
     }
   }
 
@@ -155,8 +160,25 @@ export default function Game() {
             </button>
           )}
         </div>
+      ) : roleHidden ? (
+        <button
+          className="card center"
+          style={{ padding: 14, width: '100%', cursor: 'pointer', border: '1px dashed var(--border)' }}
+          onClick={() => setRoleHidden(false)}
+        >
+          <span className="subtitle" style={{ margin: 0 }}>🙈 Role hidden — tap to reveal</span>
+        </button>
       ) : (
         <div className={`role-banner ${game.myRole ?? ''}`}>
+          <div className="row" style={{ justifyContent: 'flex-end', marginBottom: -6 }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '4px 10px', color: 'inherit' }}
+              onClick={() => setRoleHidden(true)}
+            >
+              🙈 Hide
+            </button>
+          </div>
           <h2 style={{ margin: 0 }}>{isImpostor ? 'You are the Impostor' : 'You are a Crewmate'}</h2>
           <p style={{ margin: '6px 0 0', fontSize: 14, opacity: 0.85 }}>
             {isImpostor
@@ -189,13 +211,46 @@ export default function Game() {
         </div>
       )}
 
-      {isImpostor && !game.dead && !killReady && (
-        <div className="card center" style={{ padding: 12 }}>
-          <p className="subtitle" style={{ margin: 0 }}>
-            Eliminate ready in
-          </p>
-          <div style={{ fontSize: 20 }}>
-            <Countdown endsAt={game.killAvailableAt} />
+      {isImpostor && !game.dead && (
+        <div className="card stack-sm" style={{ padding: 12, gap: 8 }}>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="subtitle" style={{ margin: 0 }}>Eliminate</span>
+            <div className="spacer" />
+            {killReady ? (
+              <span className="badge" style={{ color: 'var(--good)', borderColor: 'var(--good)' }}>Ready</span>
+            ) : (
+              <span className="timer" style={{ fontSize: 15 }}>
+                <Countdown endsAt={game.killAvailableAt} />
+              </span>
+            )}
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="subtitle" style={{ margin: 0 }}>Vent</span>
+            <div className="spacer" />
+            {room.ventAvailable && room.ventEndsAt ? (
+              <span className="timer" style={{ fontSize: 15 }}>
+                closes in <Countdown endsAt={room.ventEndsAt} />
+              </span>
+            ) : (
+              <span className="subtitle" style={{ margin: 0 }}>After a kill</span>
+            )}
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="subtitle" style={{ margin: 0 }}>Sabotage</span>
+            <div className="spacer" />
+            {game.sabotageUsesRemaining <= 0 ? (
+              <span className="subtitle" style={{ margin: 0 }}>None left</span>
+            ) : room.sabotagePuzzle ? (
+              <span className="subtitle" style={{ margin: 0 }}>In progress</span>
+            ) : sabotageReady ? (
+              <span className="badge" style={{ color: 'var(--good)', borderColor: 'var(--good)' }}>
+                Ready ({game.sabotageUsesRemaining})
+              </span>
+            ) : (
+              <span className="timer" style={{ fontSize: 15 }}>
+                <Countdown endsAt={game.sabotageAvailableAt} />
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -232,35 +287,39 @@ export default function Game() {
         </button>
       )}
 
+      {photoProofEnabled && (
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={handlePhotoSelected}
+        />
+      )}
+
+      {photoError && (
+        <p className="error-text" style={{ margin: 0 }}>
+          {photoError}
+        </p>
+      )}
+
       {commonTask && (
         <div className="card stack-sm" style={{ borderColor: 'var(--warn)' }}>
           <span className="task-room">Everyone's task</span>
           <button
             className={`task-item ${commonTask.done ? 'done' : ''}`}
-            disabled={commonTask.done || submittingPhoto}
-            onClick={handleCommonTaskClick}
+            disabled={commonTask.done || uploadingTaskId === commonTask.taskId}
+            onClick={() => handleTaskClick(commonTask.taskId, commonTask.done)}
             style={{ textAlign: 'left', width: '100%', cursor: commonTask.done ? 'default' : 'pointer' }}
           >
             <span className={`task-check ${commonTask.done ? 'checked' : ''}`}>{commonTask.done ? '✓' : ''}</span>
-            <span style={{ flex: 1 }}>{submittingPhoto ? 'Uploading photo…' : commonTask.text}</span>
+            <span style={{ flex: 1 }}>
+              {uploadingTaskId === commonTask.taskId ? 'Uploading photo…' : commonTask.text}
+            </span>
             {commonTask.visual && <span className="badge">Visual</span>}
             {photoProofEnabled && !commonTask.done && <span className="badge">📷 Photo</span>}
           </button>
-          {photoError && (
-            <p className="error-text" style={{ margin: 0 }}>
-              {photoError}
-            </p>
-          )}
-          {photoProofEnabled && (
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: 'none' }}
-              onChange={handlePhotoSelected}
-            />
-          )}
         </div>
       )}
 
@@ -272,13 +331,14 @@ export default function Game() {
               <button
                 key={t.taskId}
                 className={`task-item ${t.done ? 'done' : ''}`}
-                disabled={t.done}
-                onClick={() => game.completeTask(t.taskId)}
+                disabled={t.done || uploadingTaskId === t.taskId}
+                onClick={() => handleTaskClick(t.taskId, t.done)}
                 style={{ textAlign: 'left', width: '100%', cursor: t.done ? 'default' : 'pointer' }}
               >
                 <span className={`task-check ${t.done ? 'checked' : ''}`}>{t.done ? '✓' : ''}</span>
-                <span style={{ flex: 1 }}>{t.text}</span>
+                <span style={{ flex: 1 }}>{uploadingTaskId === t.taskId ? 'Uploading photo…' : t.text}</span>
                 {t.visual && <span className="badge">Visual</span>}
+                {photoProofEnabled && !t.done && <span className="badge">📷 Photo</span>}
               </button>
             ))}
           </div>
