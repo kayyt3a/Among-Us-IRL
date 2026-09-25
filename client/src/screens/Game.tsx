@@ -191,7 +191,13 @@ export default function Game() {
           <div className="row" style={{ justifyContent: 'flex-end', marginBottom: -6 }}>
             <button
               className="btn btn-ghost btn-sm"
-              style={{ padding: '4px 10px', color: 'inherit' }}
+              style={{
+                padding: '4px 10px',
+                color: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
               onClick={() => setRoleHidden(true)}
               aria-label="Hide role"
             >
@@ -201,6 +207,7 @@ export default function Game() {
                   display: 'inline-flex',
                   width: 18,
                   height: 18,
+                  flexShrink: 0,
                   borderRadius: '50%',
                   border: '1px solid currentColor',
                   alignItems: 'center',
@@ -208,7 +215,6 @@ export default function Game() {
                   fontSize: 13,
                   fontWeight: 800,
                   lineHeight: 1,
-                  marginRight: 4,
                 }}
               >
                 −
