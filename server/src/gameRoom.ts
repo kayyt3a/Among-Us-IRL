@@ -1042,7 +1042,17 @@ export class GameRoom {
     };
   }
 
-  publicState(): RoomStateSummary {
+  /**
+   * `viewerId` personalizes the result: impostors get to see everyone's real
+   * alive/dead status at all times (they're the informed side and should
+   * know who's already dead, including deaths they didn't cause themselves,
+   * like a Sheriff's misfire), while crewmates only see it once a meeting
+   * reveals it. Omit `viewerId` for the fully-masked default.
+   */
+  publicState(viewerId?: string): RoomStateSummary {
+    const viewer = viewerId ? this.state.players.get(viewerId) : undefined;
+    const revealStatus =
+      this.state.phase === 'meeting' || this.state.phase === 'ended' || viewer?.role === 'impostor';
     return {
       code: this.state.code,
       phase: this.state.phase,
@@ -1065,10 +1075,7 @@ export class GameRoom {
           id: p.id,
           name: p.name,
           isHost: p.isHost,
-          // Ghost status stays hidden from everyone else during normal play so a glance
-          // at the roster can't out who died; it's only revealed once a meeting is called.
-          status:
-            this.state.phase === 'meeting' || this.state.phase === 'ended' ? p.status : 'alive',
+          status: revealStatus ? p.status : 'alive',
           isSpectator: p.isSpectator,
           wins: this.state.wins.get(p.id) ?? 0,
         })),

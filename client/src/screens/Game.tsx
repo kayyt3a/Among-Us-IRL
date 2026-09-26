@@ -74,9 +74,9 @@ export default function Game() {
 
   const doneCount = game.myTasks.filter((t) => t.done).length;
   const isImpostor = game.myRole === 'impostor';
-  const killTargets = room.players.filter(
-    (p) => p.id !== game.session?.playerId && p.status === 'alive'
-  );
+  // Impostors see everyone's real status (server-personalized), so already-dead
+  // players show up greyed out here instead of just disappearing.
+  const killTargets = room.players.filter((p) => p.id !== game.session?.playerId);
   const protectTargets = room.players.filter((p) => p.status === 'alive');
 
   const sabotageReady =
@@ -446,19 +446,27 @@ export default function Game() {
         >
           <h3>Who did you eliminate?</h3>
           <div className="stack">
-            {killTargets.length === 0 && <p className="subtitle">No one nearby to eliminate.</p>}
-            {killTargets.map((p) => (
-              <button
-                key={p.id}
-                className="btn btn-danger btn-block"
-                onClick={() => {
-                  game.attemptKill(p.id, p.name);
-                  setKilling(false);
-                }}
-              >
-                {p.name}
-              </button>
-            ))}
+            {killTargets.every((p) => p.status !== 'alive') && (
+              <p className="subtitle">No one nearby to eliminate.</p>
+            )}
+            {killTargets.map((p) =>
+              p.status === 'alive' ? (
+                <button
+                  key={p.id}
+                  className="btn btn-danger btn-block"
+                  onClick={() => {
+                    game.attemptKill(p.id, p.name);
+                    setKilling(false);
+                  }}
+                >
+                  {p.name}
+                </button>
+              ) : (
+                <button key={p.id} className="btn btn-block" disabled>
+                  💀 {p.name}
+                </button>
+              )
+            )}
             <button className="btn btn-ghost btn-block" onClick={() => setKilling(false)}>
               Cancel
             </button>

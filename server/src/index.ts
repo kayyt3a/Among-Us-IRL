@@ -74,8 +74,14 @@ function clearSabotageDrainTimer(code: string) {
   }
 }
 
+/** Each player gets their own view: impostors see real alive/dead status, crewmates don't (until a meeting). */
 function broadcastRoomUpdate(room: GameRoom) {
-  io.to(room.state.code).emit('room_update', room.publicState());
+  for (const id of room.state.playerOrder) {
+    const p = room.state.players.get(id);
+    if (p?.socketId) {
+      io.to(p.socketId).emit('room_update', room.publicState(id));
+    }
+  }
 }
 
 function sendSabotageStatus(room: GameRoom) {
