@@ -74,13 +74,19 @@ export default function Meeting() {
             </p>
           ) : (
             <div className="stack">
-              {alivePlayers
+              {room.players
                 .filter((p) => p.id !== me?.id)
-                .map((p) => (
-                  <button key={p.id} className="btn btn-block" onClick={() => vote(p.id)}>
-                    {p.name}
-                  </button>
-                ))}
+                .map((p) =>
+                  p.status === 'alive' ? (
+                    <button key={p.id} className="btn btn-block" onClick={() => vote(p.id)}>
+                      {p.name}
+                    </button>
+                  ) : (
+                    <button key={p.id} className="btn btn-block" disabled>
+                      💀 {p.name}
+                    </button>
+                  )
+                )}
               <button key="self" className="btn btn-block" onClick={() => vote(me!.id)}>
                 {me?.name} (yourself)
               </button>
