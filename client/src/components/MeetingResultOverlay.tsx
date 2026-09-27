@@ -50,7 +50,7 @@ export default function MeetingResultOverlay() {
             <div style={{ fontSize: 40 }}>⚖️</div>
             <h2>{eliminatedName} was voted out</h2>
             <p className="subtitle">
-              {eliminatedName} was a{' '}
+              {eliminatedName} was {eliminatedRole === 'impostor' ? 'an' : 'a'}{' '}
               <strong style={{ color: eliminatedRole === 'impostor' ? 'var(--accent)' : 'var(--crew)' }}>
                 {eliminatedRole}
               </strong>
