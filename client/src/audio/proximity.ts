@@ -17,12 +17,52 @@ export function getAudioContextCtor(): AudioContextCtor | null {
   return w.AudioContext ?? w.webkitAudioContext ?? null;
 }
 
+// One context for the whole app. Mobile browsers (iOS Safari especially) keep
+// an AudioContext suspended, silent and deaf, unless it's started from a tap,
+// and every sound here fires from a socket event instead. A single context
+// unlocked on the first tap is what lets the kill tone, the mic scan, and the
+// alert sounds actually run on a phone.
+let sharedCtx: AudioContext | null = null;
+
+export function getAudioContext(): AudioContext | null {
+  if (!sharedCtx) {
+    const Ctor = getAudioContextCtor();
+    if (!Ctor) return null;
+    sharedCtx = new Ctor();
+  }
+  if (sharedCtx.state !== 'running' && sharedCtx.state !== 'closed') {
+    sharedCtx.resume().catch(() => {});
+  }
+  return sharedCtx;
+}
+
+function unlockFromGesture() {
+  if (sharedCtx?.state === 'running') return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  // iOS only treats the context as unlocked once something starts inside the gesture.
+  const src = ctx.createBufferSource();
+  src.buffer = ctx.createBuffer(1, 1, 22050);
+  src.connect(ctx.destination);
+  src.start(0);
+}
+
+/**
+ * Listens for taps for the life of the page: the first one unlocks audio,
+ * and any later one re-resumes it if the OS suspended it (e.g. after the
+ * phone was locked). A no-op while audio is already running.
+ */
+export function installAudioUnlock() {
+  for (const type of ['pointerdown', 'touchend', 'keydown'] as const) {
+    window.addEventListener(type, unlockFromGesture, { capture: true, passive: true });
+  }
+}
+
 /** Plays a sine tone at frequencyHz for durationMs. Returns a function that stops it early. */
 export function playProximityTone(frequencyHz: number, durationMs: number): () => void {
-  const Ctor = getAudioContextCtor();
-  if (!Ctor) return () => {};
+  const ctx = getAudioContext();
+  if (!ctx) return () => {};
 
-  const ctx = new Ctor();
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = 'sine';
@@ -31,19 +71,22 @@ export function playProximityTone(frequencyHz: number, durationMs: number): () =
   gain.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 0.05);
   osc.connect(gain);
   gain.connect(ctx.destination);
+  osc.onended = () => gain.disconnect();
   osc.start();
 
   let stopped = false;
   const stop = () => {
     if (stopped) return;
     stopped = true;
+    const now = ctx.currentTime;
     try {
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
-      osc.stop(ctx.currentTime + 0.08);
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.05);
+      osc.stop(now + 0.08);
     } catch {
       // already stopped
     }
-    setTimeout(() => ctx.close().catch(() => {}), 150);
   };
 
   const timer = setTimeout(stop, durationMs);
@@ -69,19 +112,27 @@ export interface ScanHandle {
   stop: () => void;
 }
 
+// A real tone is a narrow peak that holds steady. A clap, a dropped plate, or
+// the mic opening sprays energy across every frequency for a frame or two, so
+// a candidate only counts once it stands clear of the bins either side of it
+// (about 65Hz away, outside the tone's own spread) and stays that way for
+// several frames running.
+const SIDE_BIN_OFFSET = 6;
+const SUSTAIN_FRAMES = 4;
+
 /**
- * Opens the mic and watches for any of candidateFrequencies to rise well
- * above the ambient noise floor. Calls onDetected once with the matching
- * frequency, or never if the window elapses first. Always releases the mic
- * when it stops.
+ * Opens the mic and listens for any of candidateFrequencies for windowMs.
+ * Calls onDetected once for each candidate it hears. It keeps listening
+ * after a detection, so a stray match can never cut the scan short before
+ * the real tone arrives. Always releases the mic when it stops.
  */
 export function scanForTone(
   candidateFrequencies: number[],
   windowMs: number,
   onDetected: (frequencyHz: number) => void
 ): Promise<ScanHandle> {
-  const Ctor = getAudioContextCtor();
-  if (!Ctor || !navigator.mediaDevices?.getUserMedia) {
+  const ctx = getAudioContext();
+  if (!ctx || !navigator.mediaDevices?.getUserMedia) {
     return Promise.resolve({ stop: () => {} });
   }
 
@@ -94,7 +145,6 @@ export function scanForTone(
       },
     })
     .then((stream) => {
-      const ctx = new Ctor();
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 4096;
@@ -103,13 +153,15 @@ export function scanForTone(
 
       const data = new Uint8Array(analyser.frequencyBinCount);
       const binHz = ctx.sampleRate / analyser.fftSize;
+      const streaks = new Map<number, number>();
+      const reported = new Set<number>();
       let stopped = false;
       let raf = 0;
 
       const cleanup = () => {
         cancelAnimationFrame(raf);
+        source.disconnect();
         stream.getTracks().forEach((t) => t.stop());
-        ctx.close().catch(() => {});
       };
 
       const tick = () => {
@@ -122,11 +174,13 @@ export function scanForTone(
         for (const freq of candidateFrequencies) {
           const bin = Math.round(freq / binHz);
           const magnitude = data[bin] ?? 0;
-          if (magnitude > noiseFloor + 40 && magnitude > 90) {
-            stopped = true;
-            cleanup();
+          const sides = Math.max(data[bin - SIDE_BIN_OFFSET] ?? 0, data[bin + SIDE_BIN_OFFSET] ?? 0);
+          const peaked = magnitude > 90 && magnitude > noiseFloor + 40 && magnitude > sides + 30;
+          const run = peaked ? (streaks.get(freq) ?? 0) + 1 : 0;
+          streaks.set(freq, run);
+          if (run >= SUSTAIN_FRAMES && !reported.has(freq)) {
+            reported.add(freq);
             onDetected(freq);
-            return;
           }
         }
         raf = requestAnimationFrame(tick);
@@ -149,5 +203,6 @@ export function scanForTone(
           }
         },
       };
-    });
+    })
+    .catch(() => ({ stop: () => {} }));
 }

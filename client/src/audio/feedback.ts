@@ -2,7 +2,7 @@
 // played away from the screen, so a meeting call or a death needs to reach
 // someone whose phone is face-down on the couch, not just show up as text.
 
-import { getAudioContextCtor } from './proximity';
+import { getAudioContext } from './proximity';
 
 export function vibrate(pattern: number | number[]) {
   try {
@@ -20,9 +20,8 @@ interface Note {
 }
 
 function playSequence(notes: Note[]) {
-  const Ctor = getAudioContextCtor();
-  if (!Ctor) return;
-  const ctx = new Ctor();
+  const ctx = getAudioContext();
+  if (!ctx) return;
   for (const n of notes) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -34,11 +33,10 @@ function playSequence(notes: Note[]) {
     gain.gain.linearRampToValueAtTime(0, t0 + n.dur);
     osc.connect(gain);
     gain.connect(ctx.destination);
+    osc.onended = () => gain.disconnect();
     osc.start(t0);
     osc.stop(t0 + n.dur + 0.05);
   }
-  const totalMs = notes.reduce((max, n) => Math.max(max, (n.at + n.dur) * 1000), 0) + 200;
-  setTimeout(() => ctx.close().catch(() => {}), totalMs);
 }
 
 /** Everyone gets this: get up, go to the meeting spot. */

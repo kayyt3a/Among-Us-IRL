@@ -19,6 +19,7 @@
     "test:proximity": "node scripts/proximity-test.mjs",
     "test:roles": "node scripts/roles-test.mjs",
     "test:hostcontrols": "node scripts/hostcontrols-test.mjs",
-    "test:photoproof": "node scripts/photoproof-test.mjs"
+    "test:photoproof": "node scripts/photoproof-test.mjs",
+    "test:audio": "node scripts/audio-test.mjs"
   }
 }

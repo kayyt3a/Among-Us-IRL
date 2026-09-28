@@ -262,6 +262,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   stateRef.current = state;
   const killToneStopRef = useRef<(() => void) | null>(null);
+  const scanStopRef = useRef<(() => void) | null>(null);
   const prevPhaseRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -300,6 +301,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'task_local_done', taskId: payload.taskId });
     }
     function onYouDied() {
+      scanStopRef.current?.();
+      scanStopRef.current = null;
       alertYouDied();
       dispatch({ type: 'you_died' });
     }
@@ -355,8 +358,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     function onBeginProximityScan(payload: { windowMs: number; candidateFrequencies: number[] }) {
       // Silent: no UI change here, so the target is never tipped off mid-scan.
+      scanStopRef.current?.();
       scanForTone(payload.candidateFrequencies, payload.windowMs, (frequencyHz) => {
         socket.emit('tone_detected', { frequencyHz });
+      }).then((handle) => {
+        scanStopRef.current = handle.stop;
       });
     }
     function onSabotageStatus(payload: { usesRemaining: number; availableAt: number }) {
