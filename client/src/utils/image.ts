@@ -1,6 +1,6 @@
 /**
  * Downscales a photo file to a small JPEG data URL before it ever leaves the
- * device — keeps per-photo size (and the server's in-memory footprint) small
+ * device. Keeps per-photo size (and the server's in-memory footprint) small
  * without needing any server-side image processing.
  */
 export function downscaleImageToDataUrl(file: File, maxWidth = 480, quality = 0.6): Promise<string> {

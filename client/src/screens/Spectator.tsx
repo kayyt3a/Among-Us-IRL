@@ -1,57 +1,86 @@
+import { Crown, Eye, LogOut, MapPin, Siren } from 'lucide-react';
 import { useGame } from '../state/GameProvider';
+import Avatar from '../components/ui/Avatar';
 
 export default function Spectator() {
   const game = useGame();
   const room = game.room!;
 
   return (
-    <div className="app-shell stack">
-      <div className="row">
-        <span className="badge">{room.code}</span>
+    <div className="screen has-footer">
+      <header className="row">
+        <span className="pill pill-lg tabular">{room.code}</span>
         <div className="spacer" />
-        <span className="badge">SPECTATING</span>
-      </div>
+        <span className="pill pill-lg pill-cyan">
+          <Eye size={14} />
+          Spectating
+        </span>
+      </header>
 
-      <div className="center stack" style={{ marginTop: 16 }}>
-        <div style={{ fontSize: 48 }}>👀</div>
-        <h1 className="title">You're spectating this round</h1>
-        <p className="subtitle">
-          You joined after the round started, so you're just watching for now. You'll play from
-          the next round on.
-        </p>
+      <div className="stack center" style={{ alignItems: 'center', gap: 16, paddingTop: 16 }}>
+        <div className="icon-circle xl cyan">
+          <Eye size={38} />
+        </div>
+        <div className="stack-sm">
+          <h1 className="h1">You're watching this round</h1>
+          <p className="muted" style={{ maxWidth: 320, margin: '0 auto' }}>
+            You joined after it started, so you'll be dealt in from the next round.
+          </p>
+        </div>
       </div>
 
       {room.meeting && (
-        <div className="card center" style={{ borderColor: 'var(--warn)' }}>
-          <p className="subtitle" style={{ margin: 0 }}>
-            A meeting is underway
-          </p>
-          {room.settings.meetingSpot && (
-            <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--warn)', margin: '4px 0 0' }}>
-              {room.settings.meetingSpot}
-            </p>
-          )}
+        <div className="card card-amber row" style={{ gap: 12 }}>
+          <div className="icon-circle amber">
+            <Siren size={20} />
+          </div>
+          <div className="stack-xs" style={{ minWidth: 0 }}>
+            <span className="label">Meeting in progress</span>
+            {room.settings.meetingSpot && (
+              <span className="h3 text-amber row-sm">
+                <MapPin size={14} />
+                <span className="truncate">{room.settings.meetingSpot}</span>
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="card stack">
-        <h3>Players</h3>
-        <div className="stack">
+      <section className="stack-sm">
+        <div className="section-header">
+          <span className="label">In the room</span>
+        </div>
+        <div className="list">
           {room.players.map((p) => (
-            <div className="player-row" key={p.id}>
-              <span>{p.name}</span>
-              {p.isHost && <span className="badge badge-host">HOST</span>}
-              {p.isSpectator && <span className="badge">SPECTATING</span>}
-              {p.id === game.session?.playerId && <span className="badge">YOU</span>}
+            <div className="list-row" key={p.id}>
+              <Avatar name={p.name} />
+              <span className="list-row-title truncate" style={{ flex: 1 }}>
+                {p.name}
+                {p.id === game.session?.playerId && <span className="faint"> (you)</span>}
+              </span>
+              {p.isHost && (
+                <span className="pill pill-amber">
+                  <Crown size={11} />
+                  Host
+                </span>
+              )}
+              {p.isSpectator && (
+                <span className="pill">
+                  <Eye size={11} />
+                  Watching
+                </span>
+              )}
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="spacer" />
-      <button className="btn btn-ghost btn-block" onClick={game.leaveGame}>
-        Leave
-      </button>
+      <div className="screen-footer">
+        <button className="btn btn-ghost btn-block" onClick={game.leaveGame}>
+          <LogOut size={17} />
+          Leave
+        </button>
+      </div>
     </div>
   );
 }

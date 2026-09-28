@@ -1,6 +1,19 @@
 import { useState } from 'react';
+import { Check, Zap } from 'lucide-react';
 import type { SabotagePuzzle } from '@irl-impostor/shared';
 import { useGame } from '../state/GameProvider';
+
+function Letters({ word, solved }: { word: string; solved?: boolean }) {
+  return (
+    <div className={`letter-tiles${solved ? ' solved' : ''}`} aria-label={word}>
+      {word.split('').map((ch, i) => (
+        <span key={i} className="letter-tile">
+          {ch}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function WordRow({ index, scrambled, solved }: { index: 0 | 1; scrambled: string; solved: boolean }) {
   const game = useGame();
@@ -23,54 +36,58 @@ function WordRow({ index, scrambled, solved }: { index: 0 | 1; scrambled: string
 
   if (solved) {
     return (
-      <div className="row" style={{ opacity: 0.55 }}>
-        <span className="task-check checked" style={{ width: 24, height: 24 }}>
-          ✓
-        </span>
-        <span style={{ fontWeight: 700, letterSpacing: '0.1em', textDecoration: 'line-through' }}>
-          {scrambled}
+      <div className="row">
+        <Letters word={scrambled} solved />
+        <div className="spacer" />
+        <span className="pill pill-green">
+          <Check size={13} strokeWidth={3} />
+          Solved
         </span>
       </div>
     );
   }
 
   return (
-    <div className="stack" style={{ gap: 6 }}>
-      <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.15em' }}>{scrambled}</span>
+    <div className="stack-sm">
+      <Letters word={scrambled} />
       <div className="row">
         <input
           className="field"
-          placeholder="Your guess"
+          placeholder="Unscramble it"
+          aria-label={`Guess for word ${index + 1}`}
           value={guess}
           maxLength={20}
           autoCapitalize="characters"
+          autoComplete="off"
           onChange={(e) => {
             setGuess(e.target.value);
             setWrong(false);
           }}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
         />
-        <button className="btn btn-sm btn-primary" disabled={!guess.trim() || busy} onClick={submit}>
+        <button className="btn btn-primary" style={{ minHeight: 52 }} disabled={!guess.trim() || busy} onClick={submit}>
           Guess
         </button>
       </div>
-      {wrong && (
-        <p className="error-text" style={{ margin: 0 }}>
-          Not quite, try again.
-        </p>
-      )}
+      {wrong && <p className="error-text">Not quite. Try again.</p>}
     </div>
   );
 }
 
 export default function SabotagePuzzleCard({ puzzle }: { puzzle: SabotagePuzzle }) {
   return (
-    <div className="card stack" style={{ borderColor: 'var(--bad)' }}>
-      <h3 style={{ margin: 0 }}>⚠ Sabotage: unscramble both words!</h3>
-      <p className="subtitle" style={{ margin: 0 }}>
-        The clock is draining fast while this is up. Anyone can guess, and solving both stops it.
-      </p>
+    <div className="card card-red sabotage stack" role="alert">
+      <div className="row" style={{ gap: 12 }}>
+        <div className="icon-circle red">
+          <Zap size={20} />
+        </div>
+        <div className="stack-xs" style={{ flex: 1 }}>
+          <h3 className="h2">Sabotage</h3>
+          <p className="muted small">The clock drains 1.5x faster until both words are solved. Anyone can guess.</p>
+        </div>
+      </div>
       <WordRow index={0} scrambled={puzzle.scrambled[0]} solved={puzzle.solved[0]} />
+      <div className="divider" />
       <WordRow index={1} scrambled={puzzle.scrambled[1]} solved={puzzle.solved[1]} />
     </div>
   );

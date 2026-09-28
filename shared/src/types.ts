@@ -120,8 +120,12 @@ export interface SabotagePuzzle {
   solved: [boolean, boolean];
 }
 
+/** Why the round ended, so the recap can say so plainly. */
+export type GameOverReason = 'impostors-caught' | 'tasks-complete' | 'impostors-outnumber' | 'time-up';
+
 export interface GameOverInfo {
   winner: 'crewmates' | 'impostors';
+  reason: GameOverReason;
   players: { id: string; name: string; role: PlayerRole; status: PlayerStatus }[];
   /** Crewmate task completion at the moment the game ended (a ghost's tasks count too). */
   tasksCompleted: number;

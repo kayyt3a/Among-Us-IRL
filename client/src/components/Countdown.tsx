@@ -14,7 +14,7 @@ export default function Countdown({
   endsAt: number;
   urgentBelowMs?: number;
 }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 250);

@@ -4,6 +4,7 @@ import {
   buildCustomTasks,
   COMMON_TASKS,
   GameOverInfo,
+  GameOverReason,
   MAX_CUSTOM_TASK_LENGTH,
   MAX_CUSTOM_TASKS,
   MeetingReason,
@@ -129,7 +130,12 @@ export class GameRoom {
   get alivePlayers(): ServerPlayer[] {
     return this.state.playerOrder
       .map((id) => this.state.players.get(id)!)
-      .filter((p) => p.status === 'alive' && !p.isSpectator);
+      .filter((p) => this.isInPlay(p));
+  }
+
+  /** Alive and actually dealt into this round (not a mid-round spectator). */
+  private isInPlay(p: ServerPlayer | undefined): p is ServerPlayer {
+    return !!p && p.status === 'alive' && !p.isSpectator;
   }
 
   get aliveImpostors(): ServerPlayer[] {
@@ -390,7 +396,7 @@ export class GameRoom {
     if (Date.now() < killer.killCooldownUntil) {
       return { ok: false, error: "Can't kill yet, still on cooldown." };
     }
-    if (!target || target.status !== 'alive' || target.role === 'impostor') {
+    if (!this.isInPlay(target) || target.role === 'impostor') {
       return { ok: false, error: 'Invalid target.' };
     }
     if (targetId === this.state.protectedPlayerId) {
@@ -598,7 +604,7 @@ export class GameRoom {
     this.state.phase = 'ended';
     this.recordWin('impostors');
     this.touch();
-    return this.gameOverInfo('impostors');
+    return this.gameOverInfo('impostors', 'time-up');
   }
 
   callMeeting(callerId: string, reason: MeetingReason): { ok: true; meeting: MeetingState } | { ok: false; error: string } {
@@ -643,7 +649,7 @@ export class GameRoom {
     if (!this.state.meeting || this.state.meeting.phase !== 'voting') return false;
     const voter = this.state.players.get(voterId);
     if (!voter || voter.status !== 'alive' || voter.isSpectator) return false;
-    if (targetId !== 'skip' && !this.state.players.get(targetId)) return false;
+    if (targetId !== 'skip' && !this.isInPlay(this.state.players.get(targetId))) return false;
     this.state.meeting.votes.set(voterId, targetId);
     this.touch();
     return true;
@@ -716,7 +722,7 @@ export class GameRoom {
       return { ok: false, error: 'Can only overrule during voting.' };
     }
     const target = this.state.players.get(targetId);
-    if (!target || targetId === judgeId) {
+    if (!this.isInPlay(target) || targetId === judgeId) {
       return { ok: false, error: 'Invalid target.' };
     }
 
@@ -768,7 +774,7 @@ export class GameRoom {
       return { ok: false, error: "You've already used your shield." };
     }
     const target = this.state.players.get(targetId);
-    if (!target || target.status !== 'alive') {
+    if (!this.isInPlay(target)) {
       return { ok: false, error: 'Invalid target.' };
     }
     ghost.specialRoleUsed = true;
@@ -800,7 +806,7 @@ export class GameRoom {
       return { ok: false, error: 'Can only shoot during play.' };
     }
     const target = this.state.players.get(targetId);
-    if (!target || target.status !== 'alive' || targetId === sheriffId) {
+    if (!this.isInPlay(target) || targetId === sheriffId) {
       return { ok: false, error: 'Invalid target.' };
     }
 
@@ -869,10 +875,13 @@ export class GameRoom {
     const crewmatesAlive = this.aliveCrewmates.length;
 
     let winner: 'crewmates' | 'impostors' | null = null;
+    let reason: GameOverReason = 'impostors-caught';
     if (impostorsAlive === 0) {
       winner = 'crewmates';
+      reason = 'impostors-caught';
     } else if (impostorsAlive >= crewmatesAlive) {
       winner = 'impostors';
+      reason = 'impostors-outnumber';
     } else {
       // Every crewmate's tasks have to be done, dead or alive; a ghost's
       // unfinished list still blocks the win, same as real Among Us.
@@ -881,6 +890,7 @@ export class GameRoom {
         allCrewmates.length > 0 && allCrewmates.every((p) => p.tasks.every((t) => t.done));
       if (crewmatesDoneWithTasks) {
         winner = 'crewmates';
+        reason = 'tasks-complete';
       }
     }
 
@@ -889,17 +899,19 @@ export class GameRoom {
     this.state.winner = winner;
     this.state.phase = 'ended';
     this.recordWin(winner);
-    return this.gameOverInfo(winner);
+    return this.gameOverInfo(winner, reason);
   }
 
-  gameOverInfo(winner: 'crewmates' | 'impostors'): GameOverInfo {
+  gameOverInfo(winner: 'crewmates' | 'impostors', reason: GameOverReason): GameOverInfo {
     const { done, total } = this.crewTaskProgress();
     return {
       winner,
-      players: this.state.playerOrder.map((id) => {
-        const p = this.state.players.get(id)!;
-        return { id: p.id, name: p.name, role: p.role ?? 'crewmate', status: p.status };
-      }),
+      reason,
+      players: this.state.playerOrder
+        .map((id) => this.state.players.get(id)!)
+        // Mid-round spectators were never dealt in, so they have no role to reveal.
+        .filter((p) => !p.isSpectator && p.role)
+        .map((p) => ({ id: p.id, name: p.name, role: p.role ?? 'crewmate', status: p.status })),
       tasksCompleted: done,
       tasksTotal: total,
       durationMs: this.state.gameStartedAt ? Date.now() - this.state.gameStartedAt : 0,

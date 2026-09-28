@@ -89,6 +89,17 @@ async function main() {
   await wait(300);
   assert(stragglerGotRole === false, 'no game_started was sent to the spectator');
 
+  console.log('--- Nobody can target the spectator ---');
+  const impostorIdx = [0, 1, 2, 3].find((i) => round1Started[i].role === 'impostor');
+  const killRes = waitFor(sockets[impostorIdx], 'kill_result');
+  sockets[impostorIdx].emit('kill_player', { targetId: stragglerId });
+  assert((await killRes).ok === false, 'impostor cannot eliminate a spectator');
+  await wait(100);
+  assert(
+    latestRoom.players.find((p) => p.id === stragglerId)?.status === 'alive',
+    'spectator is untouched after the rejected kill'
+  );
+
   console.log('--- Everyone finishes their tasks; crew wins round 1 ---');
   const gameOverPromise = waitFor(sockets[0], 'game_over', 8000);
   for (let i = 0; i < 4; i++) {
@@ -98,6 +109,11 @@ async function main() {
   }
   const round1Result = await gameOverPromise;
   assert(round1Result.winner === 'crewmates', 'round 1 ends with a crewmate win (all real tasks done)');
+  assert(round1Result.reason === 'tasks-complete', 'game over says the crew won on tasks');
+  assert(
+    !round1Result.players.some((p) => p.id === stragglerId),
+    'spectator is left out of the final roles reveal'
+  );
   await wait(150);
   const winsAfterRound1 = new Map(latestRoom.players.map((p) => [p.id, p.wins]));
   const round1WinTotal = [...winsAfterRound1.values()].reduce((a, b) => a + b, 0);

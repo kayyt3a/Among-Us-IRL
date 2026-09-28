@@ -100,14 +100,22 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     party. The host can flip **"Latecomers play immediately"** off in
     the lobby if they'd rather late joiners **spectate** that round
     (watch only, no vote, no meeting, no role) and play from the next
-    round on instead. The host can also kick a player or hand host
-    powers to someone else from the lobby.
+    round on instead. Spectators can't be targeted by kills, the
+    Sheriff, the Judge, the Guardian Angel shield or votes, and they're
+    left out of the end-of-round role reveal. The host can also kick a
+    player or hand host powers to someone else from the lobby.
+15. **Inviting people.** The lobby shows the room code as big tiles,
+    plus **Copy link** and **Invite** (the phone's share sheet). The
+    link opens the app with the code already filled in.
 
 ## Tech stack
 
 - **Server**: Node + Express + Socket.IO, in-memory game state (no
   database, since games are ephemeral and single-house by design).
-- **Client**: React + TypeScript (Vite), installable as a PWA.
+- **Client**: React + TypeScript (Vite), installable as a PWA. The UI
+  is a small hand-rolled design system in `client/src/index.css`
+  (tokens, cards, sheets, toggles, steppers) with Inter for type and
+  lucide icons. Shared building blocks live in `client/src/components/ui/`.
 - **Shared**: a small workspace package with the wire types and the task
   pools, imported by both client and server so they can't drift apart.
 
@@ -237,7 +245,8 @@ landing on the real impostor and misfiring on an innocent crewmate
 the host kicking a player from the lobby, transferring host mid-game,
 a late joiner being dealt straight into the round as a crewmate
 (default), a late joiner landing as a spectator instead when the host
-turns that off, and win tallies accumulating correctly across two
+turns that off (and not being a valid kill target or showing up in the
+role reveal), and win tallies accumulating correctly across two
 rounds in the same room.
 
 `scripts/photoproof-test.mjs` (`npm run test:photoproof`) covers photo
@@ -247,6 +256,15 @@ id or an oversized one is rejected, real submissions complete every
 task and show up for everyone via `get_task_photos` with per-task
 detail (whose, which task, common or not), and the photos clear on
 the next round.
+
+`scripts/audio-test.mjs` (`npm run test:audio`) tests the real Web
+Audio code in headless Chromium, no phones needed. It plays the app's
+own proximity tone back into its own detector for every frequency,
+feeds recorded WAVs through the real microphone pipeline (a faint tone
+under party chatter, pure noise, claps, an out-of-band tone) to check
+for misses and false alarms, and checks that one tap resumes a
+suspended audio context the way iOS needs. It needs Playwright and
+doesn't need the server.
 
 ## Configuration
 

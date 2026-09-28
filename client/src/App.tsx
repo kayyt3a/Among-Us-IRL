@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { LoaderCircle } from 'lucide-react';
 import { useGame } from './state/GameProvider';
+import Logo from './components/ui/Logo';
 import Home from './screens/Home';
 import Lobby from './screens/Lobby';
 import Game from './screens/Game';
@@ -16,8 +18,12 @@ export default function App() {
   let screen: ReactNode;
   if (game.connecting) {
     screen = (
-      <div className="app-shell center" style={{ justifyContent: 'center' }}>
-        <p className="subtitle">Connecting…</p>
+      <div className="screen" style={{ justifyContent: 'center', alignItems: 'center', gap: 20 }}>
+        <Logo size={64} />
+        <div className="row-sm muted small">
+          <LoaderCircle className="spin" size={16} />
+          Connecting
+        </div>
       </div>
     );
   } else if (!game.session || !game.room) {

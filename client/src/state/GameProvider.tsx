@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type {
   GameOverInfo,
@@ -28,6 +28,8 @@ import {
 
 const STORAGE_KEY = 'irl-impostor-session';
 
+export type NoticeKind = 'error' | 'warning' | 'info';
+
 interface Session {
   code: string;
   playerId: string;
@@ -56,6 +58,8 @@ interface State {
   meetingResult: MeetingResult | null;
   gameOver: GameOverInfo | null;
   error: string | null;
+  /** How the current `error` message should read: a real error, a heads-up, or plain good news. */
+  noticeKind: NoticeKind;
   ventNonce: number;
   ventDurationMs: number;
   killAttempt: KillAttemptState;
@@ -81,7 +85,7 @@ type Action =
   | { type: 'meeting_result'; result: MeetingResult }
   | { type: 'clear_meeting_result' }
   | { type: 'game_over'; info: GameOverInfo }
-  | { type: 'error'; message: string | null }
+  | { type: 'error'; message: string | null; kind?: NoticeKind }
   | { type: 'reset_round' }
   | { type: 'kill_attempt_start'; targetId: string; targetName: string }
   | { type: 'kill_listen_start'; windowMs: number }
@@ -106,6 +110,7 @@ const initialState: State = {
   meetingResult: null,
   gameOver: null,
   error: null,
+  noticeKind: 'error',
   ventNonce: 0,
   ventDurationMs: 4000,
   killAttempt: idleKillAttempt,
@@ -156,7 +161,7 @@ function reducer(state: State, action: Action): State {
     case 'game_over':
       return { ...state, gameOver: action.info };
     case 'error':
-      return { ...state, error: action.message };
+      return { ...state, error: action.message, noticeKind: action.kind ?? 'error' };
     case 'reset_round':
       return {
         ...state,
@@ -335,7 +340,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
     }
     function onAbilityResult(payload: { ok: boolean; message?: string }) {
-      if (payload.message) dispatch({ type: 'error', message: payload.message });
+      if (payload.message) dispatch({ type: 'error', message: payload.message, kind: payload.ok ? 'info' : 'error' });
     }
     function onKicked() {
       localStorage.removeItem(STORAGE_KEY);
@@ -376,7 +381,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     function onSabotageTriggered() {
       alertSabotage();
-      dispatch({ type: 'error', message: '⚠ Sabotage! Unscramble both words to stop it.' });
+      dispatch({ type: 'error', message: 'Sabotage! Unscramble both words to stop the clock draining.', kind: 'warning' });
     }
     function onSabotageWordSolved() {
       alertSabotageWordSolved();
@@ -385,7 +390,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       alertSabotageStopped();
     }
     function onGuardianProtectionUsed() {
-      dispatch({ type: 'error', message: 'Your shield saved someone from elimination.' });
+      dispatch({ type: 'error', message: 'Your shield saved someone from elimination.', kind: 'info' });
     }
 
     socket.on('connect', onConnect);
@@ -466,6 +471,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const t = setTimeout(alertClockLow, msUntilWarning);
     return () => clearTimeout(t);
   }, [state.room?.gameEndsAt]);
+
+  // Stable across renders so the toast's auto-dismiss timer isn't restarted
+  // every time room state changes.
+  const dismissError = useCallback(() => dispatch({ type: 'error', message: null }), []);
+  const dismissMeetingResult = useCallback(() => dispatch({ type: 'clear_meeting_result' }), []);
 
   const api = useMemo<GameApi>(() => {
     const me = state.room?.players.find((p) => p.id === state.session?.playerId) ?? null;
@@ -564,8 +574,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
       castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),
       playAgain: () => socket.emit('play_again'),
-      dismissMeetingResult: () => dispatch({ type: 'clear_meeting_result' }),
-      dismissError: () => dispatch({ type: 'error', message: null }),
+      dismissMeetingResult,
+      dismissError,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);

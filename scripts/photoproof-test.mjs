@@ -19,7 +19,7 @@ function assert(cond, msg) {
   console.log('  pass:', msg);
 }
 
-// A tiny fixed "photo" — the server never inspects the image content, only
+// A tiny fixed "photo". The server never inspects the image content, only
 // stores the string and caps its length, so any data URL-shaped string works.
 const FAKE_PHOTO = 'data:image/jpeg;base64,' + 'A'.repeat(200);
 
