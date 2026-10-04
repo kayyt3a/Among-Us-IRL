@@ -106,7 +106,17 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     player or hand host powers to someone else from the lobby.
 15. **Inviting people.** The lobby shows the room code as big tiles,
     plus **Copy link** and **Invite** (the phone's share sheet). The
-    link opens the app with the code already filled in.
+    link opens the app with the code already filled in, and it unfurls
+    as a proper preview card in iMessage, WhatsApp, Discord and so on
+    ("Join my IRL Impostor game, room code ABCD"). The server fills in
+    absolute URLs for the preview from the request; set `PUBLIC_URL` if
+    you're behind something that hides the real host.
+16. **How to play.** A short rules guide opens from the home screen and
+    the lobby, so first-timers can catch up without the host explaining
+    everything.
+17. **Screen stays awake.** While you're in a room the app holds a
+    screen wake lock, so phones don't lock themselves mid-round. It's
+    re-taken automatically after you switch apps and come back.
 
 ## Tech stack
 

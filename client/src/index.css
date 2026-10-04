@@ -1611,3 +1611,62 @@ img {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* How to play guide                                                   */
+/* ------------------------------------------------------------------ */
+
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.guide-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.guide p,
+.guide li {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.guide p + p {
+  margin-top: 6px;
+}
+
+.guide strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.guide ol,
+.guide ul {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.guide ul + p {
+  margin-top: 8px;
+}
+
+.guide-role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.guide-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

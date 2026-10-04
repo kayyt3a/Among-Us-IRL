@@ -53,6 +53,15 @@ export default function GameOver() {
     return Array.from(map.values());
   }, [photos]);
 
+  useEffect(() => {
+    if (!viewing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewing(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [viewing]);
+
   return (
     <>
       <div className="screen has-footer">

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { RoomSettings, SpecialRole } from '@irl-impostor/shared';
 import {
+  CircleHelp,
   Camera,
   Crosshair,
   Crown,
@@ -19,16 +20,17 @@ import Avatar from '../components/ui/Avatar';
 import RoomCode from '../components/ui/RoomCode';
 import { Stepper, Toggle } from '../components/ui/Controls';
 import { ROLE_INFO } from '../components/roles';
+import HowToPlay from '../components/HowToPlay';
 
 const MAX_CUSTOM_TASKS = 20;
 const MEETING_SPOT_DEBOUNCE_MS = 400;
 const MIN_PLAYERS = 3;
 
-const ROLE_SETTINGS: { role: SpecialRole; key: keyof RoomSettings; description: string }[] = [
-  { role: 'judge', key: 'judgeEnabled', description: 'Can force-eject one player in a vote. Guess wrong and the Judge goes instead.' },
-  { role: 'guardian-angel', key: 'guardianAngelEnabled', description: 'After dying, can shield one living player from the next kill.' },
-  { role: 'sheriff', key: 'sheriffEnabled', description: 'Can shoot one suspect. An innocent guess takes out the Sheriff instead.' },
-  { role: 'engineer', key: 'engineerEnabled', description: 'Can trigger one decoy blackout to throw suspicion around.' },
+const ROLE_SETTINGS: { role: SpecialRole; key: keyof RoomSettings }[] = [
+  { role: 'judge', key: 'judgeEnabled' },
+  { role: 'guardian-angel', key: 'guardianAngelEnabled' },
+  { role: 'sheriff', key: 'sheriffEnabled' },
+  { role: 'engineer', key: 'engineerEnabled' },
 ];
 
 function SettingRow({
@@ -76,6 +78,7 @@ export default function Lobby() {
   // made fast typing lose characters: the update for an earlier keystroke
   // would round-trip back and overwrite whatever had been typed since.
   const [spotDraft, setSpotDraft] = useState(settings.meetingSpot);
+  const [showGuide, setShowGuide] = useState(false);
   const spotFocused = useRef(false);
   const spotDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -119,11 +122,15 @@ export default function Lobby() {
         <div className="spacer" />
         <span className="h3">Lobby</span>
         <div className="spacer" />
+        <button className="icon-btn" aria-label="How to play" onClick={() => setShowGuide(true)}>
+          <CircleHelp size={18} />
+        </button>
         <span className="pill pill-lg" aria-label={`${playerCount} players`}>
           <Users size={14} />
           {playerCount}
         </span>
       </header>
+      {showGuide && <HowToPlay onClose={() => setShowGuide(false)} />}
 
       <RoomCode code={room.code} />
 
@@ -260,10 +267,10 @@ export default function Lobby() {
             <span className="faint tiny">Dealt to crewmates</span>
           </div>
           <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            {(isHost ? ROLE_SETTINGS : enabledRoles).map(({ role, key, description }) => {
-              const { label, Icon, color } = ROLE_INFO[role];
+            {(isHost ? ROLE_SETTINGS : enabledRoles).map(({ role, key }) => {
+              const { label, Icon, color, summary } = ROLE_INFO[role];
               return (
-                <SettingRow key={role} icon={<Icon size={17} />} iconColor={color} title={label} description={description}>
+                <SettingRow key={role} icon={<Icon size={17} />} iconColor={color} title={label} description={summary}>
                   {isHost && (
                     <Toggle
                       label={label}

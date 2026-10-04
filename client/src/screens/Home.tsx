@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, ChevronLeft, House, KeyRound, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronLeft, House, KeyRound, Sparkles, Users } from 'lucide-react';
 import { useGame } from '../state/GameProvider';
 import Logo from '../components/ui/Logo';
+import HowToPlay from '../components/HowToPlay';
 
 function codeFromUrl(): string {
   const code = new URLSearchParams(window.location.search).get('code') ?? '';
@@ -15,6 +16,7 @@ export default function Home() {
   const [name, setName] = useState('');
   const [code, setCode] = useState(initialCode);
   const [busy, setBusy] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
@@ -77,6 +79,13 @@ export default function Home() {
             <span className="tiny muted">Play around your house</span>
           </div>
         </div>
+
+        <button className="btn btn-ghost btn-block" onClick={() => setShowGuide(true)}>
+          <BookOpen size={17} />
+          How to play
+        </button>
+
+        {showGuide && <HowToPlay onClose={() => setShowGuide(false)} />}
       </div>
     );
   }

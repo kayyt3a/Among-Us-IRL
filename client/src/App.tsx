@@ -11,9 +11,13 @@ import Spectator from './screens/Spectator';
 import BlackoutOverlay from './components/BlackoutOverlay';
 import Toast from './components/Toast';
 import MeetingResultOverlay from './components/MeetingResultOverlay';
+import { useScreenWakeLock } from './utils/wakeLock';
 
 export default function App() {
   const game = useGame();
+  // Keep the screen on for as long as you're in a room, lobby included, so the
+  // host's room code stays visible and nobody's phone locks mid-round.
+  useScreenWakeLock(!!game.session && !!game.room);
 
   let screen: ReactNode;
   if (game.connecting) {

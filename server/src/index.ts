@@ -2,6 +2,7 @@ import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import path from 'path';
+import { readFile } from 'fs/promises';
 import { Server, Socket } from 'socket.io';
 import type { ClientToServerEvents, PrivateGameInfo, ServerToClientEvents } from '@irl-impostor/shared';
 import { PROXIMITY_FREQUENCIES_HZ } from '@irl-impostor/shared';
@@ -18,13 +19,48 @@ app.use(cors({ origin: CLIENT_ORIGIN }));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const clientDist = path.join(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-app.get('*', (req, res, next) => {
+// Behind Render's proxy, so req.protocol reflects the real https scheme.
+app.set('trust proxy', true);
+// index.html is served by the handler below instead, so its link-preview tags
+// can be filled in per request.
+app.use(express.static(clientDist, { index: false }));
+app.get('*', async (req, res, next) => {
   if (req.path.startsWith('/socket.io')) return next();
-  res.sendFile(path.join(clientDist, 'index.html'), (err) => {
-    if (err) next();
-  });
+  try {
+    const html = await readFile(path.join(clientDist, 'index.html'), 'utf8');
+    res.type('html').send(withLinkPreview(html, req));
+  } catch {
+    next();
+  }
 });
+
+/**
+ * Link previews need absolute URLs, and an invite link (/?code=ABCD) reads
+ * better as "Join my game" than as the generic pitch.
+ */
+function withLinkPreview(html: string, req: express.Request): string {
+  const origin = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  const rawCode = typeof req.query.code === 'string' ? req.query.code : '';
+  const code = /^[a-z0-9]{4}$/i.test(rawCode) ? rawCode.toUpperCase() : null;
+
+  let out = html
+    .replace(/content="\/og-image\.png"/g, `content="${escapeAttr(origin)}/og-image.png"`)
+    .replace('<meta property="og:url" content="/" />', `<meta property="og:url" content="${escapeAttr(origin)}/${code ? `?code=${code}` : ''}" />`);
+
+  if (code) {
+    const title = 'Join my IRL Impostor game';
+    const description = `Room code ${code}. Tap to jump straight in, no app needed.`;
+    out = out
+      .replace('<meta property="og:title" content="IRL Impostor" />', `<meta property="og:title" content="${title}" />`)
+      .replace('<meta name="twitter:title" content="IRL Impostor" />', `<meta name="twitter:title" content="${title}" />`)
+      .replace(/(<meta (?:property="og:description"|name="twitter:description") content=")[^"]*"/g, `$1${description}"`);
+  }
+  return out;
+}
+
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
 
 const httpServer = http.createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
