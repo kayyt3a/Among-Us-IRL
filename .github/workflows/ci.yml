@@ -113,4 +113,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t irl-impostor .
+      - name: Build the image
+        run: |
+          set -o pipefail
+          docker build --progress=plain -t irl-impostor . 2>&1 | tee docker.log
+      - name: Explain a failed build
+        if: failure()
+        run: |
+          # Surface the end of the build log as an annotation, readable
+          # from the run summary without downloading logs.
+          echo "::error title=docker build failed::$(tail -40 docker.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
