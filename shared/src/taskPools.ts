@@ -178,7 +178,7 @@ export const ALL_TASKS: Task[] = ROOM_TYPES.flatMap((room) =>
 );
 
 /**
- * The "swipe card" of IRL Impostor: one of these is dealt to every single
+ * The "swipe card" of IRL Imposter: one of these is dealt to every single
  * player each game, crew and impostor alike, as an extra task on top of
  * their usual list. Everyone doing the same, quick, unmistakably visual
  * action means a player who's clearly never done it (or fakes it wrong)

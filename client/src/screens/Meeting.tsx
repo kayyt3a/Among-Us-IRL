@@ -37,9 +37,16 @@ export default function Meeting() {
           <div className="icon-circle xl amber siren">{isReport ? <Skull size={38} /> : <Siren size={38} />}</div>
           <div className="stack-xs">
             <h1 className="h1">{isReport ? 'Body reported' : 'Emergency meeting'}</h1>
-            <p className="muted">
-              Called by <strong style={{ color: 'var(--text)' }}>{meeting.calledByName}</strong>
-            </p>
+            {isReport && meeting.bodyName ? (
+              <p className="muted">
+                <strong style={{ color: 'var(--text)' }}>{meeting.calledByName}</strong> found{' '}
+                <strong style={{ color: 'var(--text)' }}>{meeting.bodyName}</strong>
+              </p>
+            ) : (
+              <p className="muted">
+                Called by <strong style={{ color: 'var(--text)' }}>{meeting.calledByName}</strong>
+              </p>
+            )}
           </div>
         </header>
 

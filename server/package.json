@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@irl-impostor/shared": "*",
+    "@sentry/node": "^10.76.2",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "redis": "^5.12.1",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {

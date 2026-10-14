@@ -47,7 +47,7 @@ export default function HowToPlay({ onClose }: { onClose: () => void }) {
           </p>
           <p>
             <strong>Impostors</strong> win by eliminating crewmates until they're equal in number, or by running out
-            the 20 minute clock.
+            the game clock (the host sets how long).
           </p>
         </Section>
 
@@ -87,15 +87,20 @@ export default function HowToPlay({ onClose }: { onClose: () => void }) {
 
         <Section icon={<Siren size={19} />} tone="amber" title="If you're eliminated">
           <p>
-            Your phone buzzes to let you know. Don't react and don't say who did it. Keep doing your tasks as a ghost, they
+            Your phone buzzes to let you know. Don't react and don't say who did it. Sit down right where you are: you're
+            the body now. Once someone finds you or a meeting is called, get up and keep doing your tasks as a ghost. They
             still count for the crew.
           </p>
         </Section>
 
         <Section icon={<MapPin size={19} />} tone="amber" title="Meetings">
           <p>
-            Anyone alive can call one meeting per game. Everyone heads to the meeting spot, talks for a minute, then votes.
-            The most votes is out. A tie or a skip means nobody goes.
+            Found a body? Tap <strong>Report body</strong> and pick who it is. That's free, as often as you find one. Each
+            player also gets one <strong>emergency meeting</strong> per game, for when you just can't wait.
+          </p>
+          <p>
+            Either way, everyone heads to the meeting spot, talks it out, then votes. The most votes is out, and a tie or a
+            skip means nobody goes. Afterwards everyone sees exactly who voted for whom.
           </p>
         </Section>
 

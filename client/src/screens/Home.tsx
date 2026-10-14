@@ -42,7 +42,7 @@ export default function Home() {
         <div className="stack center" style={{ alignItems: 'center', gap: 18 }}>
           <Logo size={84} />
           <div className="stack-sm">
-            <h1 className="display">IRL Impostor</h1>
+            <h1 className="display">IRL Imposter</h1>
             <p className="muted" style={{ fontSize: 16, maxWidth: 300, margin: '0 auto' }}>
               The social deduction party game you play in a real house, with real friends.
             </p>

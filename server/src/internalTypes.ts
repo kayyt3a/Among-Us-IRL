@@ -33,6 +33,10 @@ export interface ServerPlayer {
   ventCooldownUntil: number;
   /** Joined mid-round, watching this round. Becomes a normal player again next round. */
   isSpectator: boolean;
+  /** Dead and already found: reported, or seen by everyone at a meeting. Can't be reported again. */
+  bodyFound: boolean;
+  /** After a report that didn't point at an unfound body, this player can't report again until then. */
+  reportBlockedUntil: number;
 }
 
 export interface PendingKillAttempt {
@@ -50,6 +54,8 @@ export interface ServerMeeting {
   discussionEndsAt: number;
   votingEndsAt: number;
   votes: Map<string, string>; // voterId -> targetId | 'skip'
+  /** For a body report: whose body was found. */
+  bodyId: string | null;
 }
 
 export interface GameRoomState {
@@ -67,6 +73,11 @@ export interface GameRoomState {
   customTasks: string[];
   lateJoinersPlayNow: boolean;
   photoProofEnabled: boolean;
+  gameMinutes: number;
+  discussionSeconds: number;
+  votingSeconds: number;
+  killCooldownSeconds: number;
+  revealRoleOnEject: boolean;
   createdAt: number;
   lastActivity: number;
   meeting: ServerMeeting | null;

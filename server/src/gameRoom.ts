@@ -11,6 +11,10 @@ import {
   MeetingResult,
   MeetingState,
   MeetingVoteTally,
+  CastVote,
+  TIMER_LIMITS,
+  TimerSetting,
+  clampTimer,
   pickTwoSabotageWords,
   PlayerRole,
   PlayerTask,
@@ -24,15 +28,12 @@ import {
 } from '@irl-impostor/shared';
 import {
   DEFAULT_TASKS_PER_PLAYER,
-  GAME_DURATION_MS,
-  KILL_COOLDOWN_MS,
   MAX_MEETINGS_PER_PLAYER,
   MAX_TASK_PHOTO_CHARS,
   MAX_ROOM_PHOTO_CHARS,
   MEETING_COOLDOWN_MS,
-  MEETING_DISCUSSION_MS,
-  MEETING_VOTING_MS,
   MIN_PLAYERS,
+  REPORT_RETRY_MS,
   SABOTAGE_COOLDOWN_MS,
   SABOTAGE_EXTRA_DRAIN_RATE,
   SABOTAGE_MAX_USES,
@@ -78,6 +79,11 @@ export class GameRoom {
       customTasks: [],
       lateJoinersPlayNow: true,
       photoProofEnabled: false,
+      gameMinutes: TIMER_LIMITS.gameMinutes.default,
+      discussionSeconds: TIMER_LIMITS.discussionSeconds.default,
+      votingSeconds: TIMER_LIMITS.votingSeconds.default,
+      killCooldownSeconds: TIMER_LIMITS.killCooldownSeconds.default,
+      revealRoleOnEject: true,
       createdAt: Date.now(),
       lastActivity: Date.now(),
       meeting: null,
@@ -124,6 +130,8 @@ export class GameRoom {
       killCooldownUntil: 0,
       ventCooldownUntil: 0,
       isSpectator,
+      bodyFound: false,
+      reportBlockedUntil: 0,
     };
     this.state.players.set(id, player);
     this.state.playerOrder.push(id);
@@ -184,6 +192,11 @@ export class GameRoom {
     if (typeof partial.sheriffEnabled === 'boolean') this.state.sheriffEnabled = partial.sheriffEnabled;
     if (typeof partial.engineerEnabled === 'boolean') this.state.engineerEnabled = partial.engineerEnabled;
     if (typeof partial.photoProofEnabled === 'boolean') this.state.photoProofEnabled = partial.photoProofEnabled;
+    if (typeof partial.revealRoleOnEject === 'boolean') this.state.revealRoleOnEject = partial.revealRoleOnEject;
+    for (const key of Object.keys(TIMER_LIMITS) as TimerSetting[]) {
+      const value = partial[key];
+      if (typeof value === 'number' && Number.isFinite(value)) this.state[key] = clampTimer(key, value);
+    }
     if (Array.isArray(partial.customTasks)) {
       this.state.customTasks = partial.customTasks
         .slice(0, MAX_CUSTOM_TASKS * 2)
@@ -294,6 +307,8 @@ export class GameRoom {
       // goes on cooldown after its own first use this round.
       player.killCooldownUntil = 0;
       player.ventCooldownUntil = 0;
+      player.bodyFound = false;
+      player.reportBlockedUntil = 0;
 
       const fellowImpostors =
         role === 'impostor' && impostorIds.size > 1
@@ -316,7 +331,7 @@ export class GameRoom {
     this.state.pendingKill = null;
     this.state.protectedPlayerId = null;
     this.state.gameStartedAt = now;
-    this.state.gameEndsAt = now + GAME_DURATION_MS;
+    this.state.gameEndsAt = now + this.state.gameMinutes * 60_000;
     this.state.sabotageUsesRemaining = SABOTAGE_MAX_USES;
     this.state.sabotageAvailableAt = 0;
     this.state.sabotagePuzzle = null;
@@ -436,7 +451,7 @@ export class GameRoom {
     const killer = this.state.players.get(killerId)!;
     const target = this.state.players.get(targetId)!;
     target.status = 'dead';
-    killer.killCooldownUntil = Date.now() + KILL_COOLDOWN_MS;
+    killer.killCooldownUntil = Date.now() + this.state.killCooldownSeconds * 1000;
     this.touch();
     return this.checkWinConditions();
   }
@@ -647,20 +662,55 @@ export class GameRoom {
       return { ok: false, error: 'Meetings are on cooldown.' };
     }
 
-    const now = Date.now();
     caller.meetingsCalled += 1;
+    return { ok: true, meeting: this.openMeeting(caller, reason, null) };
+  }
+
+  /**
+   * A living player found a body and reports it. Unlike an emergency meeting
+   * this is free: it doesn't use up the reporter's one meeting and ignores the
+   * meeting cooldown, same as Among Us. It only works on a body nobody has
+   * found yet; a report that doesn't (wrong person, someone alive) is refused
+   * and the reporter has to wait a bit, so it can't be used to probe who's
+   * dead.
+   */
+  reportBody(reporterId: string, bodyId: string): { ok: true; meeting: MeetingState } | { ok: false; error: string } {
+    const reporter = this.state.players.get(reporterId);
+    if (!this.isInPlay(reporter)) return { ok: false, error: 'Only living players can report a body.' };
+    if (this.state.phase !== 'playing') return { ok: false, error: 'Can only report a body during play.' };
+    const now = Date.now();
+    if (now < reporter.reportBlockedUntil) {
+      return { ok: false, error: 'Hold on a moment before reporting again.' };
+    }
+    const body = this.state.players.get(bodyId);
+    if (!body || body.status !== 'dead' || body.bodyFound || body.isSpectator || bodyId === reporterId) {
+      reporter.reportBlockedUntil = now + REPORT_RETRY_MS;
+      this.touch();
+      return { ok: false, error: "That isn't a body anyone has found yet." };
+    }
+    return { ok: true, meeting: this.openMeeting(reporter, 'report', body) };
+  }
+
+  private openMeeting(caller: ServerPlayer, reason: MeetingReason, body: ServerPlayer | null): MeetingState {
+    const now = Date.now();
+    // Everyone sees who's dead at a meeting, so every body counts as found from here on.
+    for (const p of this.state.players.values()) {
+      if (p.status === 'dead') p.bodyFound = true;
+    }
     this.state.phase = 'meeting';
+    const discussionMs = this.state.discussionSeconds * 1000;
     this.state.meeting = {
-      calledBy: callerId,
+      calledBy: caller.id,
       calledByName: caller.name,
       reason,
       phase: 'discussion',
-      discussionEndsAt: now + MEETING_DISCUSSION_MS,
-      votingEndsAt: now + MEETING_DISCUSSION_MS + MEETING_VOTING_MS,
+      discussionEndsAt: now + discussionMs,
+      votingEndsAt: now + discussionMs + this.state.votingSeconds * 1000,
       votes: new Map(),
+      bodyId: body?.id ?? null,
     };
     this.touch();
-    return { ok: true, meeting: this.publicMeeting()! };
+    return this.publicMeeting()!;
   }
 
   advanceMeetingToVoting(): MeetingState | null {
@@ -714,16 +764,33 @@ export class GameRoom {
       const p = this.state.players.get(eliminatedId);
       if (p) {
         p.status = 'dead';
+        p.bodyFound = true;
         eliminatedName = p.name;
         eliminatedRole = p.role;
       }
     }
 
+    // Votes are never anonymous: everyone sees who voted for whom.
+    const votes: CastVote[] = Array.from(meeting.votes.entries()).map(([voterId, targetId]) => ({
+      voterId,
+      voterName: this.state.players.get(voterId)?.name ?? 'Someone',
+      targetId,
+    }));
+
     this.touch();
     const winner = this.checkWinConditions();
+    const roleHidden = !this.state.revealRoleOnEject && eliminatedId !== null;
 
     return {
-      result: { eliminatedId, eliminatedName, eliminatedRole, tally, wasTie },
+      result: {
+        eliminatedId,
+        eliminatedName,
+        eliminatedRole: roleHidden ? null : eliminatedRole,
+        tally,
+        votes,
+        wasTie,
+        roleHidden,
+      },
       winner,
     };
   }
@@ -760,11 +827,13 @@ export class GameRoom {
 
     if (target.role === 'impostor') {
       target.status = 'dead';
+      target.bodyFound = true;
       eliminatedId = target.id;
       eliminatedName = target.name;
       eliminatedRole = 'impostor';
     } else {
       judge.status = 'dead';
+      judge.bodyFound = true;
       eliminatedId = judge.id;
       eliminatedName = judge.name;
       eliminatedRole = 'crewmate';
@@ -781,6 +850,7 @@ export class GameRoom {
         eliminatedName,
         eliminatedRole,
         tally: [],
+        votes: [],
         wasTie: false,
         overruledByName: judge.name,
         judgeMisfired,
@@ -1076,6 +1146,8 @@ export class GameRoom {
       discussionEndsAt: m.discussionEndsAt,
       votingEndsAt: m.votingEndsAt,
       votedPlayerIds: Array.from(m.votes.keys()),
+      bodyId: m.bodyId,
+      bodyName: m.bodyId ? (this.state.players.get(m.bodyId)?.name ?? null) : null,
     };
   }
 
@@ -1104,6 +1176,11 @@ export class GameRoom {
         customTasks: this.state.customTasks,
         lateJoinersPlayNow: this.state.lateJoinersPlayNow,
         photoProofEnabled: this.state.photoProofEnabled,
+        gameMinutes: this.state.gameMinutes,
+        discussionSeconds: this.state.discussionSeconds,
+        votingSeconds: this.state.votingSeconds,
+        killCooldownSeconds: this.state.killCooldownSeconds,
+        revealRoleOnEject: this.state.revealRoleOnEject,
       },
       players: this.state.playerOrder
         .map((id) => this.state.players.get(id)!)

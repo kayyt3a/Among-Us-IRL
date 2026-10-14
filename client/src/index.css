@@ -1602,6 +1602,113 @@ img {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Ejection + vote breakdown                                           */
+/* ------------------------------------------------------------------ */
+
+.eject-stage {
+  position: relative;
+  width: 100%;
+  height: 96px;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(1px 1px at 12% 30%, rgba(255, 255, 255, 0.7), transparent),
+    radial-gradient(1px 1px at 28% 72%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 46% 18%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1px 1px at 63% 80%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(1px 1px at 78% 40%, rgba(255, 255, 255, 0.6), transparent),
+    radial-gradient(1.5px 1.5px at 91% 66%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(120% 100% at 50% 50%, #10131f, #05060a);
+  animation: stars-drift 6s linear infinite;
+}
+
+.eject-drift {
+  animation: eject-drift 2.8s cubic-bezier(0.45, 0, 0.6, 1) 0.35s forwards;
+}
+
+@keyframes eject-drift {
+  0% {
+    transform: translateX(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(170px) rotate(540deg) scale(0.35);
+    opacity: 0;
+  }
+}
+
+@keyframes stars-drift {
+  from {
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: -60px 0, -40px 0, -80px 0, -50px 0, -70px 0, -45px 0, 0 0;
+  }
+}
+
+.verdict {
+  opacity: 0;
+  animation: fade-in 0.5s ease 2.1s forwards;
+}
+
+.vote-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  text-align: left;
+  max-height: 34dvh;
+  overflow-y: auto;
+}
+
+.vote-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vote-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  font-size: 14.5px;
+}
+
+.vote-count {
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 12px;
+  display: inline-grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.vote-voters {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict {
+    opacity: 1;
+    animation: none;
+  }
+  .eject-drift {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

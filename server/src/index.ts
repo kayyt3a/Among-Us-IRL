@@ -1,3 +1,4 @@
+import './monitoring'; // first, so Sentry (if configured) is up before anything else runs
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
@@ -25,6 +26,8 @@ import {
 } from './constants';
 import { RateLimiter, clientIp, guardEvents, isExemptIp, isString } from './protection';
 import type { ServerPlayer } from './internalTypes';
+import { RoomSaver, openRoomStore } from './persistence';
+import { clientSentryDsn, reportError } from './monitoring';
 
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
@@ -41,6 +44,17 @@ app.use((_req, res, next) => {
   next();
 });
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Send anyone on the old *.onrender.com address to the real domain (set
+// PUBLIC_URL, e.g. https://irlimposter.com), keeping the path and any
+// ?code= invite. Socket traffic is left alone so a page already open on the
+// old address doesn't drop out mid-game.
+const PUBLIC_URL = process.env.PUBLIC_URL?.replace(/\/+$/, '');
+app.use((req, res, next) => {
+  if (!PUBLIC_URL || req.path.startsWith('/socket.io')) return next();
+  if (!req.hostname.endsWith('.onrender.com')) return next();
+  res.redirect(301, PUBLIC_URL + req.originalUrl);
+});
 
 const clientDist = path.join(__dirname, '../../client/dist');
 // Behind Render's proxy, so req.protocol reflects the real https scheme.
@@ -63,7 +77,7 @@ app.get('*', async (req, res, next) => {
  * better as "Join my game" than as the generic pitch.
  */
 function withLinkPreview(html: string, req: express.Request): string {
-  const origin = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  const origin = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
   const rawCode = typeof req.query.code === 'string' ? req.query.code : '';
   const code = /^[a-z0-9]{4}$/i.test(rawCode) ? rawCode.toUpperCase() : null;
 
@@ -71,12 +85,16 @@ function withLinkPreview(html: string, req: express.Request): string {
     .replace(/content="\/og-image\.png"/g, `content="${escapeAttr(origin)}/og-image.png"`)
     .replace('<meta property="og:url" content="/" />', `<meta property="og:url" content="${escapeAttr(origin)}/${code ? `?code=${code}` : ''}" />`);
 
+  if (clientSentryDsn) {
+    out = out.replace('</head>', `<meta name="sentry-dsn" content="${escapeAttr(clientSentryDsn)}" />\n  </head>`);
+  }
+
   if (code) {
-    const title = 'Join my IRL Impostor game';
+    const title = 'Join my IRL Imposter game';
     const description = `Room code ${code}. Tap to jump straight in, no app needed.`;
     out = out
-      .replace('<meta property="og:title" content="IRL Impostor" />', `<meta property="og:title" content="${title}" />`)
-      .replace('<meta name="twitter:title" content="IRL Impostor" />', `<meta name="twitter:title" content="${title}" />`)
+      .replace('<meta property="og:title" content="IRL Imposter" />', `<meta property="og:title" content="${title}" />`)
+      .replace('<meta name="twitter:title" content="IRL Imposter" />', `<meta name="twitter:title" content="${title}" />`)
       .replace(/(<meta (?:property="og:description"|name="twitter:description") content=")[^"]*"/g, `$1${description}"`);
   }
   return out;
@@ -320,6 +338,36 @@ function scheduleMeetingTimers(room: GameRoom) {
   meetingTimers.set(code, timers);
 }
 
+// ---------- Saving games across restarts (only with REDIS_URL) ----------
+let saver: RoomSaver | null = null;
+const loadingRooms = new Map<string, Promise<GameRoom | null>>();
+
+/** A room from memory, or from the last save if this server hasn't seen it since starting. */
+async function getRoom(code: string): Promise<GameRoom | null> {
+  const inMemory = rooms.get(code);
+  if (inMemory || !saver) return inMemory ?? null;
+  let pending = loadingRooms.get(code);
+  if (!pending) {
+    pending = saver.load(code).then((room) => {
+      loadingRooms.delete(code);
+      if (!room || rooms.has(code)) return rooms.get(code) ?? null;
+      rooms.set(code, room);
+      resumeRoom(room);
+      console.log(`[persistence] restored room ${code} (${room.state.phase})`);
+      return room;
+    });
+    loadingRooms.set(code, pending);
+  }
+  return pending;
+}
+
+/** Restarts the timers a restored room was relying on, from the deadlines it saved. */
+function resumeRoom(room: GameRoom) {
+  if (room.state.phase === 'meeting' && room.state.meeting) scheduleMeetingTimers(room);
+  else if (room.state.phase === 'playing') scheduleGameClock(room);
+  if (room.state.sabotagePuzzle && room.state.phase !== 'ended') startSabotageDrainTimer(room);
+}
+
 function findRoomOrEmitError(socket: Socket<ClientToServerEvents, ServerToClientEvents>) {
   const meta = socketMeta.get(socket.id);
   if (!meta) {
@@ -339,14 +387,14 @@ io.on('connection', (socket) => {
   const ip = clientIp(socket);
   const exempt = isExemptIp(ip);
 
-  socket.on('create_room', ({ name }, cb) => {
+  socket.on('create_room', async ({ name }, cb) => {
     if (!isString(name) || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
     if (rooms.size >= MAX_ROOMS) return cb({ ok: false, error: 'The server is full right now. Try again in a few minutes.' });
     if (!exempt && !createLimiter.take(ip)) {
       return cb({ ok: false, error: 'Too many rooms created from this network. Wait a minute and try again.' });
     }
     let code = generateRoomCode();
-    while (rooms.has(code)) code = generateRoomCode();
+    while (rooms.has(code) || (saver && (await saver.exists(code)))) code = generateRoomCode();
 
     const room = new GameRoom(code);
     const player = room.addPlayer(name, true);
@@ -359,9 +407,9 @@ io.on('connection', (socket) => {
     broadcastRoomUpdate(room);
   });
 
-  socket.on('join_room', ({ code, name }, cb) => {
+  socket.on('join_room', async ({ code, name }, cb) => {
     if (!exempt && !failedJoinLimiter.has(ip)) return cb({ ok: false, error: TOO_MANY_JOINS });
-    const room = isString(code) ? rooms.get(code.toUpperCase()) : undefined;
+    const room = isString(code) && code.length <= 8 ? await getRoom(code.toUpperCase()) : null;
     if (!room) {
       failedJoinLimiter.take(ip);
       return cb({ ok: false, error: 'Room not found.' });
@@ -392,12 +440,12 @@ io.on('connection', (socket) => {
     broadcastRoomUpdate(room);
   });
 
-  socket.on('rejoin_room', ({ code, playerId }, cb) => {
+  socket.on('rejoin_room', async ({ code, playerId }, cb) => {
     // Same answer whether the room or the player is missing, so rejoin can't
     // be used to probe which room codes exist. Not counted against the
     // failed-join limit: after a server restart every phone on the network
     // fails its rejoin at once.
-    const room = isString(code) ? rooms.get(code.toUpperCase()) : undefined;
+    const room = isString(code) && code.length <= 8 ? await getRoom(code.toUpperCase()) : null;
     const player = isString(playerId) ? room?.state.players.get(playerId) : undefined;
     if (!room || !player) return cb({ ok: false, error: 'That game has ended.' });
 
@@ -666,6 +714,20 @@ io.on('connection', (socket) => {
     scheduleMeetingTimers(room);
   });
 
+  socket.on('report_body', ({ bodyId }) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return;
+    const { room, playerId } = ctx;
+    const res = room.reportBody(playerId, isString(bodyId) ? bodyId : '');
+    if (!res.ok) {
+      socket.emit('error_message', { message: res.error });
+      return;
+    }
+    io.to(room.state.code).emit('meeting_called', res.meeting);
+    broadcastRoomUpdate(room);
+    scheduleMeetingTimers(room);
+  });
+
   socket.on('cast_vote', ({ targetId }) => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
@@ -823,15 +885,40 @@ setInterval(() => {
       clearGameClockTimer(code);
       clearSabotageDrainTimer(code);
       rooms.delete(code);
+      void saver?.remove(code);
     }
   }
 }, 60 * 1000).unref();
 
 // Safety net: a bug in a timer callback shouldn't end every game on the
 // server. Socket handlers are already guarded in guardEvents.
-process.on('uncaughtException', (err) => console.error('[server] uncaught exception:', err));
-process.on('unhandledRejection', (err) => console.error('[server] unhandled rejection:', err));
+process.on('uncaughtException', (err) => reportError('[server] uncaught exception:', err));
+process.on('unhandledRejection', (err) => reportError('[server] unhandled rejection:', err));
 
-httpServer.listen(PORT, () => {
-  console.log(`IRL Impostor server listening on :${PORT}`);
-});
+async function main() {
+  const store = await openRoomStore();
+  if (store) {
+    saver = new RoomSaver(store);
+    setInterval(() => void saver!.flush(rooms), 3000).unref();
+
+    // Render sends SIGTERM before replacing this instance on a deploy. Save
+    // everything first, so the new instance picks every game back up.
+    let shuttingDown = false;
+    const shutdown = async (signal: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[server] ${signal}: saving ${rooms.size} room(s) before exit`);
+      await saver!.flush(rooms).catch(() => {});
+      await store.close().catch(() => {});
+      process.exit(0);
+    };
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+    process.on('SIGINT', () => void shutdown('SIGINT'));
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`IRL Imposter server listening on :${PORT}`);
+  });
+}
+
+void main();

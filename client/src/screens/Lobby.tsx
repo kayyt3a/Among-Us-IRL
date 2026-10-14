@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { RoomSettings, SpecialRole } from '@irl-impostor/shared';
+import { TIMER_LIMITS, type RoomSettings, type SpecialRole, type TimerSetting } from '@irl-impostor/shared';
 import {
   CircleHelp,
+  Clock,
+  Hourglass,
+  MessagesSquare,
+  Vote,
   Camera,
   Crosshair,
   Crown,
@@ -25,6 +29,16 @@ import HowToPlay from '../components/HowToPlay';
 const MAX_CUSTOM_TASKS = 20;
 const MEETING_SPOT_DEBOUNCE_MS = 400;
 const MIN_PLAYERS = 3;
+
+const minutes = (m: number) => `${m} min`;
+const seconds = (s: number) => (s >= 60 && s % 60 === 0 ? `${s / 60} min` : s > 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`);
+
+const TIMER_ROWS: { key: TimerSetting; title: string; Icon: typeof Clock; format: (v: number) => string }[] = [
+  { key: 'gameMinutes', title: 'Game clock', Icon: Clock, format: minutes },
+  { key: 'discussionSeconds', title: 'Discussion', Icon: MessagesSquare, format: seconds },
+  { key: 'votingSeconds', title: 'Voting', Icon: Vote, format: seconds },
+  { key: 'killCooldownSeconds', title: 'Kill cooldown', Icon: Hourglass, format: seconds },
+];
 
 const ROLE_SETTINGS: { role: SpecialRole; key: keyof RoomSettings }[] = [
   { role: 'judge', key: 'judgeEnabled' },
@@ -259,6 +273,34 @@ export default function Lobby() {
         </div>
       </section>
 
+      <section className="stack-sm">
+        <div className="section-header">
+          <span className="label">Timers</span>
+        </div>
+        <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
+          {TIMER_ROWS.map(({ key, title, Icon, format }) => {
+            const limit = TIMER_LIMITS[key];
+            return (
+              <SettingRow key={key} icon={<Icon size={17} />} title={title}>
+                {isHost ? (
+                  <Stepper
+                    label={title}
+                    value={settings[key]}
+                    min={limit.min}
+                    max={limit.max}
+                    step={limit.step}
+                    format={format}
+                    onChange={(v) => game.updateSettings({ [key]: v })}
+                  />
+                ) : (
+                  <span className="h3 tabular">{format(settings[key])}</span>
+                )}
+              </SettingRow>
+            );
+          })}
+        </div>
+      </section>
+
       {(isHost || enabledRoles.length > 0) && (
         <section className="stack-sm">
           <div className="section-header">
@@ -290,6 +332,27 @@ export default function Lobby() {
           <span className="label">House rules</span>
         </div>
         <div className="card" style={{ paddingTop: 4, paddingBottom: 4 }}>
+          <SettingRow
+            icon={<UserX size={17} />}
+            title="Reveal role when voted out"
+            description={
+              settings.revealRoleOnEject
+                ? 'Everyone learns whether the ejected player was an impostor.'
+                : 'Only who left is shown. Their role stays a secret.'
+            }
+          >
+            {isHost ? (
+              <Toggle
+                label="Reveal role when voted out"
+                checked={settings.revealRoleOnEject}
+                onChange={(v) => game.updateSettings({ revealRoleOnEject: v })}
+              />
+            ) : (
+              <span className={`pill ${settings.revealRoleOnEject ? 'pill-green' : ''}`}>
+                {settings.revealRoleOnEject ? 'On' : 'Off'}
+              </span>
+            )}
+          </SettingRow>
           <SettingRow
             icon={<DoorOpen size={17} />}
             title="Latecomers play immediately"

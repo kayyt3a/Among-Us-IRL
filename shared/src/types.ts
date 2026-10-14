@@ -74,6 +74,16 @@ export interface RoomSettings {
   lateJoinersPlayNow: boolean;
   /** If true, completing any task requires a photo instead of just a tap, so a losing impostor can verify no one cheated. Off by default. */
   photoProofEnabled: boolean;
+  /** Game clock length in minutes. See TIMER_LIMITS for the allowed range. */
+  gameMinutes: number;
+  /** Meeting discussion length in seconds. */
+  discussionSeconds: number;
+  /** Meeting vote length in seconds. */
+  votingSeconds: number;
+  /** Impostor kill cooldown in seconds. */
+  killCooldownSeconds: number;
+  /** If true (default), an ejected player's role is announced. If false, the room only learns who left. */
+  revealRoleOnEject: boolean;
 }
 
 /** A submitted task photo, fetched on demand for the end-of-game recap rather than broadcast to everyone. */
@@ -100,6 +110,16 @@ export interface MeetingState {
   votingEndsAt: number;
   /** Ids of players who have already cast a vote (not who they voted for). */
   votedPlayerIds: string[];
+  /** For a body report: whose body was found. */
+  bodyId?: string | null;
+  bodyName?: string | null;
+}
+
+/** One cast vote, revealed with the result so everyone sees who voted for whom. */
+export interface CastVote {
+  voterId: string;
+  voterName: string;
+  targetId: string | 'skip';
 }
 
 export interface MeetingResult {
@@ -107,7 +127,11 @@ export interface MeetingResult {
   eliminatedName: string | null;
   eliminatedRole: PlayerRole | null;
   tally: MeetingVoteTally[];
+  /** Every vote, voter by voter. Empty when the Judge overruled the vote. */
+  votes: CastVote[];
   wasTie: boolean;
+  /** True when the host turned off role reveals, so eliminatedRole is withheld. */
+  roleHidden?: boolean;
   /** Set when the Judge overruled the vote instead of it resolving normally. */
   overruledByName?: string;
   /** Set when the Judge's overrule misfired (target wasn't the impostor) and the Judge was ejected instead. */
@@ -217,6 +241,8 @@ export interface ClientToServerEvents {
   report_mic_status: (payload: { available: boolean }) => void;
   trigger_vent: () => void;
   call_meeting: (payload: { reason: MeetingReason }) => void;
+  /** Reports a body the player found. Free: doesn't use up their emergency meeting. */
+  report_body: (payload: { bodyId: string }) => void;
   cast_vote: (payload: { targetId: string | 'skip' }) => void;
   play_again: () => void;
   /** Impostor-only: spend a sabotage charge to start the unscramble minigame. */

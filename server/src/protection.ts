@@ -1,4 +1,5 @@
 import type { Socket } from 'socket.io';
+import { reportError } from './monitoring';
 
 /**
  * Abuse protection for the socket server: rate limits, per-IP caps and
@@ -107,10 +108,13 @@ export function guardEvents(socket: Socket, flood: RateLimiter) {
   const on = socket.on.bind(socket) as (event: string, listener: (...args: unknown[]) => void) => Socket;
   (socket as unknown as { on: typeof on }).on = (event, listener) =>
     on(event, (...args: unknown[]) => {
+      const report = (err: unknown) => reportError(`[socket] "${event}" handler threw:`, err, { event });
       try {
-        listener(...args);
+        const result = listener(...args) as unknown;
+        // Async handlers (the ones that may load a saved room) fail as promises.
+        if (result instanceof Promise) result.catch(report);
       } catch (err) {
-        console.error(`[socket] "${event}" handler threw:`, err);
+        report(err);
       }
     });
 }

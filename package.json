@@ -23,6 +23,8 @@
     "test:audio": "node scripts/audio-test.mjs",
     "test:abuse": "node scripts/abuse-test.mjs",
     "test:ui": "node scripts/ui-test.mjs",
-    "lint": "npm run lint --workspace=client"
+    "lint": "npm run lint --workspace=client",
+    "test:features": "node scripts/features-test.mjs",
+    "test:persistence": "node scripts/persistence-test.mjs"
   }
 }

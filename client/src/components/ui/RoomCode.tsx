@@ -18,7 +18,7 @@ export default function RoomCode({ code }: { code: string }) {
   async function invite() {
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'IRL Impostor', text: `Join my IRL Impostor game. Room code ${code}.`, url: inviteUrl });
+        await navigator.share({ title: 'IRL Imposter', text: `Join my IRL Imposter game. Room code ${code}.`, url: inviteUrl });
       } catch {
         // share sheet dismissed
       }

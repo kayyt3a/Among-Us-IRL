@@ -1,7 +1,7 @@
 /** The brand mark: a party mask, for a game about hidden identities at a real party. */
 export default function Logo({ size = 72 }: { size?: number }) {
   return (
-    <svg className="brand-mark" width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="IRL Impostor">
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 64 64" role="img" aria-label="IRL Imposter">
       <defs>
         <linearGradient id="logo-bg" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#1c2030" />

@@ -23,6 +23,16 @@ jobs:
     name: Build, lint and game tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +56,11 @@ jobs:
       - run: npm run test:hostcontrols
       - run: npm run test:photoproof
       - run: npm run test:abuse
+      - run: npm run test:features
+      - name: Restart mid-game (Redis)
+        run: npm run test:persistence
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
 
       - name: Server log
         if: failure()

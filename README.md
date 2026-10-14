@@ -1,4 +1,4 @@
-# IRL Impostor
+# IRL Imposter
 
 A real-life social deduction party game (Among Us style), playable in
 anyone's house with zero setup. Open a link, join with a room code, and
@@ -63,11 +63,20 @@ play. No accounts, no app install, no QR codes or Bluetooth.
    anyone worried about a shoulder-surfer catching an "You are the
    Impostor" screen.
 10. Before starting, the host sets a **meeting spot**, a real place in
-    the house (the couch, the kitchen table). Anyone can **call a
-    meeting** at any time; every device shows "Everyone return to
-    [meeting spot]" plus a synced discussion timer and a vote, and the
-    most-voted player is eliminated.
-11. A shared **game clock** (20 minutes by default) runs the whole
+    the house (the couch, the kitchen table). An eliminated player sits
+    down where they fell: they're the body. Whoever finds them taps
+    **Report body** and picks who it is. Reporting is free and
+    unlimited, but only works on a body nobody has found yet (a wrong
+    report makes the reporter wait 15s, so it can't be used to probe
+    who's dead). Each player also gets one **emergency meeting** per
+    game. Either way every device shows "Everyone return to [meeting
+    spot]" plus a synced discussion timer and a vote, and the
+    most-voted player is eliminated. Votes are never anonymous: the
+    result lists who voted for whom, with a little ejection animation.
+    The host can turn off revealing the ejected player's role.
+11. A shared **game clock** (20 minutes by default, 5 to 60 in the
+    lobby, along with discussion time, voting time and the kill
+    cooldown) runs the whole
     match. If it hits zero, the impostors win by default. The
     impostor has a handful of **sabotage** charges (with a cooldown
     between uses); spending one shows two scrambled words to the
@@ -108,13 +117,18 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     plus **Copy link** and **Invite** (the phone's share sheet). The
     link opens the app with the code already filled in, and it unfurls
     as a proper preview card in iMessage, WhatsApp, Discord and so on
-    ("Join my IRL Impostor game, room code ABCD"). The server fills in
+    ("Join my IRL Imposter game, room code ABCD"). The server fills in
     absolute URLs for the preview from the request; set `PUBLIC_URL` if
     you're behind something that hides the real host.
 16. **How to play.** A short rules guide opens from the home screen and
     the lobby, so first-timers can catch up without the host explaining
     everything.
-17. **Screen stays awake.** While you're in a room the app holds a
+17. **Soundtrack.** A quiet synthesized drone and heartbeat plays
+    during a round and speeds up for a sabotage or the last two
+    minutes. There's a speaker toggle in the game header, remembered
+    per phone. It sits far below the kill-check tones, so it can't
+    interfere with them.
+18. **Screen stays awake.** While you're in a room the app holds a
     screen wake lock, so phones don't lock themselves mid-round. It's
     re-taken automatically after you switch apps and come back.
 
@@ -209,9 +223,36 @@ docker run -p 4000:4000 irl-impostor
 Whatever you deploy to, set `CLIENT_ORIGIN` to your app's URL if you
 ever split the client off to a different origin (not needed for the
 default single-process setup, where the server serves the client
-itself). Since game state lives in memory, a redeploy or restart clears
-any rooms in progress. Fine for a game night, not meant to run
-unattended for days.
+itself).
+
+**Environment variables** (all optional):
+
+| Variable | What it does |
+| --- | --- |
+| `PUBLIC_URL` | The real address, e.g. `https://irlimposter.com`. Old `*.onrender.com` links redirect there (keeping `?code=` invites) and link previews use it. The Dockerfile sets it. |
+| `REDIS_URL` | Saves games so a deploy or restart doesn't end them. See below. |
+| `SENTRY_DSN` | Turns on Sentry error tracking for the server and the browser. |
+
+**Keeping games alive across deploys.** Without `REDIS_URL`, games
+live in memory and a deploy or restart ends every game in progress.
+With it, rooms are saved a few seconds after each change and once more
+when Render sends the shutdown signal, then loaded back the moment a
+phone reconnects, timers and all. Players see a short "reconnecting"
+and carry on. Task photos aren't saved (they're big), so a restart
+only empties the end-of-game gallery. To set it up:
+
+1. Make a free database at [upstash.com](https://upstash.com) (Redis,
+   any region near your Render service).
+2. Copy its **Redis URL** (starts with `rediss://`).
+3. In Render, **Environment > Add Environment Variable**: `REDIS_URL`
+   set to that URL, and save. Render redeploys and the log says
+   `[persistence] saving games to Redis.`
+
+**Error tracking.** Create a free project at [sentry.io](https://sentry.io)
+(platform: Node.js), copy its DSN, and add it in Render as
+`SENTRY_DSN`. Crashes on the server and on players' phones then show
+up in Sentry. The browser only downloads Sentry when this is set, and
+no player names or photos are sent.
 
 ### Smoke test
 
@@ -275,6 +316,20 @@ under party chatter, pure noise, claps, an out-of-band tone) to check
 for misses and false alarms, and checks that one tap resumes a
 suspended audio context the way iOS needs. It needs Playwright and
 doesn't need the server.
+
+`scripts/features-test.mjs` (`npm run test:features`) covers the
+lobby timers (clamping and steps, and that the game uses them),
+reporting a body (wrong reports refused with a wait, real ones
+starting a meeting that names the body, not using up the reporter's
+emergency meeting, and no reporting the same body twice), the vote
+breakdown in the result, and the hidden-role house rule.
+
+`scripts/persistence-test.mjs` (`npm run test:persistence`) starts its
+own server with Redis, sets up a game in the middle of a meeting,
+restarts the server the way a deploy does, and checks every phone
+rejoins on its own with the same roles, tasks, clock and meeting, and
+that the round still finishes normally. Needs Redis running locally
+(`REDIS_URL`, default `redis://127.0.0.1:6379`).
 
 `scripts/abuse-test.mjs` (`npm run test:abuse`) plays a stranger
 trying to break things: every event sent with junk payloads, wrongly

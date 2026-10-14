@@ -9,6 +9,8 @@ COPY . .
 RUN npm install && npm run build
 
 ENV NODE_ENV=production
+# The canonical address. Old *.onrender.com links redirect here, and link previews use it.
+ENV PUBLIC_URL=https://irlimposter.com
 ENV PORT=4000
 EXPOSE 4000
 

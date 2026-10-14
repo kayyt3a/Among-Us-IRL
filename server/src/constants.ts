@@ -5,22 +5,18 @@ export const MAX_TASKS_PER_PLAYER = 8;
 export const MIN_PLAYERS = 3;
 export const MAX_PLAYERS = 15;
 
-export const MEETING_DISCUSSION_MS = 60_000;
-export const MEETING_VOTING_MS = 30_000;
 
 // Vent and kill are both available the instant a round starts; each only
 // goes on cooldown after its own first use, independently of the other.
 export const VENT_COOLDOWN_MS = 45_000;
 export const VENT_DURATION_MS = 4_000; // how long the blackout lasts on every screen
 
-export const KILL_COOLDOWN_MS = 45_000; // cooldown between kills, per impostor
 
 export const MAX_MEETINGS_PER_PLAYER = 1; // emergency meetings each player gets per game
 export const MEETING_COOLDOWN_MS = 20_000; // how long after a meeting ends before another can be called
 
 // The shared game clock: crew must finish tasks / catch the impostors before
 // it runs out, or the impostors win by default. Sabotage cuts it down.
-export const GAME_DURATION_MS = 20 * 60 * 1000;
 export const SABOTAGE_MAX_USES = 3;
 // Cooldown starts once a sabotage is solved (stopped), not when it's triggered.
 export const SABOTAGE_COOLDOWN_MS = 45_000;
@@ -48,3 +44,6 @@ export const SOCKET_EVENTS_PER_SECOND = 15; // sustained, far above any real pla
 export const MAX_ROOM_PHOTO_CHARS = 25_000_000; // about 25 MB of photos per room per round
 export const MAX_TOTAL_PHOTO_CHARS = 150_000_000; // across every room, to stay inside a small server's memory
 export const ROOM_EMPTY_CLEANUP_MS = 15 * 60 * 1000; // a room nobody is connected to is dropped after 15 min
+
+// Game clock, meeting and kill cooldown lengths are host settings now: see TIMER_LIMITS in shared.
+export const REPORT_RETRY_MS = 15_000; // wait after a report that didn't point at an unfound body

@@ -1,6 +1,6 @@
 {
-  "name": "IRL Impostor",
-  "short_name": "IRL Impostor",
+  "name": "IRL Imposter",
+  "short_name": "IRL Imposter",
   "description": "A real-life social deduction party game, playable in any house with zero setup.",
   "start_url": "/",
   "display": "standalone",

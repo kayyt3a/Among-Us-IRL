@@ -30,22 +30,36 @@ export function Stepper({
   max,
   onChange,
   label,
+  step = 1,
+  format = String,
 }: {
   value: number;
   min: number;
   max: number;
   onChange: (next: number) => void;
   label: string;
+  step?: number;
+  format?: (value: number) => string;
 }) {
   return (
     <div className="stepper" role="group" aria-label={label}>
-      <button type="button" aria-label={`Fewer ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(value - 1)}>
+      <button
+        type="button"
+        aria-label={`Less ${label.toLowerCase()}`}
+        disabled={value <= min}
+        onClick={() => onChange(Math.max(min, value - step))}
+      >
         <Minus size={16} strokeWidth={2.5} />
       </button>
       <span className="stepper-value" aria-live="polite">
-        {value}
+        {format(value)}
       </span>
-      <button type="button" aria-label={`More ${label.toLowerCase()}`} disabled={value >= max} onClick={() => onChange(value + 1)}>
+      <button
+        type="button"
+        aria-label={`More ${label.toLowerCase()}`}
+        disabled={value >= max}
+        onClick={() => onChange(Math.min(max, value + step))}
+      >
         <Plus size={16} strokeWidth={2.5} />
       </button>
     </div>

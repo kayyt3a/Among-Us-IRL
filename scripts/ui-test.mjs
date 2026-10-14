@@ -133,6 +133,12 @@ await host.getByRole('button', { name: 'Add task' }).click();
 await wait(400);
 check((await host.getByRole('switch', { name: 'Sheriff' }).getAttribute('aria-checked')) === 'true', 'Sheriff toggle switched on');
 check((await host.getByRole('switch', { name: 'Latecomers play immediately' }).getAttribute('aria-checked')) === 'false', 'Latecomers toggle switched off');
+await host.getByRole('button', { name: 'More game clock' }).click();
+await wait(250);
+check((await host.locator('.stepper-value', { hasText: '25 min' }).count()) === 1, 'host can lengthen the game clock in 5 minute steps');
+await host.getByRole('button', { name: 'Less game clock' }).click();
+await wait(250);
+check((await pages.Liam.getByText('Timers', { exact: true }).count()) === 1, 'guests see the round timers');
 await shot(host, '04-lobby-host');
 check((await host.evaluate(() => window.__wl.active)) === 1, 'exactly one screen wake lock held once in a room');
 // The browser drops the lock when the app is backgrounded; coming back should re-take it.
@@ -173,6 +179,15 @@ const plainCrew = crewNames.find((n) => n !== sheriffName && n !== judgeName) ??
 
 await shot(pages[sheriffName], '06-game-crew-sheriff');
 await shot(imp, '07-game-impostor');
+check((await imp.getByRole('button', { name: /Turn soundtrack (on|off)/ }).count()) === 1, 'soundtrack toggle is in the game header');
+{
+  const crewPage = pages[crewNames[0]];
+  await crewPage.getByRole('button', { name: 'Report body' }).click();
+  await crewPage.locator('.sheet').waitFor();
+  await shot(crewPage, '07b-report-body-sheet', false);
+  check((await crewPage.locator('.sheet .choice').count()) === 4, 'report sheet lists everyone else in the round');
+  await crewPage.getByRole('button', { name: 'Cancel' }).click();
+}
 const readyCount = await imp.locator('.ability:not(:disabled)').count();
 check(readyCount === 3, `all three impostor tools ready at round start (got ${readyCount})`);
 
@@ -263,7 +278,9 @@ check(await jd.locator('.choice', { hasText: sheriffName }).isDisabled(), 'dead 
 await jd.locator('.choice', { hasText: impostorName }).click();
 await jd.getByText('was voted out').waitFor({ timeout: 40000 });
 await wait(400);
+await wait(2200); // let the ejection animation play out
 await shot(jd, '17-meeting-result', false);
+check((await jd.locator('.vote-breakdown .vote-row').count()) >= 1, 'meeting result shows who voted for whom');
 
 // ---------- Game over ----------
 await host.getByText(/win$/).first().waitFor({ timeout: 15000 });

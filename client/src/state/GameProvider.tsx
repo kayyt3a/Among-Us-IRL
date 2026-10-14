@@ -14,6 +14,7 @@ import type {
 } from '@irl-impostor/shared';
 import { socket } from '../socket';
 import { playProximityTone, requestMicPermission, scanForTone } from '../audio/proximity';
+import { playEjectWhoosh } from '../audio/ambience';
 import {
   alertClockLow,
   alertGameOver,
@@ -55,6 +56,8 @@ interface State {
   myTasks: PlayerTask[];
   fellowImpostors: { id: string; name: string }[];
   dead: boolean;
+  /** Dead, and nobody has found the body yet (no report or meeting since). The ghost should stay put. */
+  bodyUnfound: boolean;
   meetingResult: MeetingResult | null;
   gameOver: GameOverInfo | null;
   error: string | null;
@@ -81,6 +84,7 @@ type Action =
   | { type: 'game_started'; payload: PrivateGameInfo }
   | { type: 'task_local_done'; taskId: string }
   | { type: 'you_died' }
+  | { type: 'body_found' }
   | { type: 'vent'; durationMs: number }
   | { type: 'meeting_result'; result: MeetingResult }
   | { type: 'clear_meeting_result' }
@@ -107,6 +111,7 @@ const initialState: State = {
   myTasks: [],
   fellowImpostors: [],
   dead: false,
+  bodyUnfound: false,
   meetingResult: null,
   gameOver: null,
   error: null,
@@ -143,6 +148,7 @@ function reducer(state: State, action: Action): State {
         mySpecialRole: action.payload.specialRole ?? null,
         specialRoleUsed: false,
         dead: false,
+        bodyUnfound: false,
         gameOver: null,
       };
     case 'task_local_done':
@@ -151,7 +157,9 @@ function reducer(state: State, action: Action): State {
         myTasks: state.myTasks.map((t) => (t.taskId === action.taskId ? { ...t, done: true } : t)),
       };
     case 'you_died':
-      return { ...state, dead: true };
+      return { ...state, dead: true, bodyUnfound: !state.dead };
+    case 'body_found':
+      return { ...state, bodyUnfound: false };
     case 'vent':
       return { ...state, ventNonce: state.ventNonce + 1, ventDurationMs: action.durationMs };
     case 'meeting_result':
@@ -169,6 +177,7 @@ function reducer(state: State, action: Action): State {
         myTasks: [],
         fellowImpostors: [],
         dead: false,
+        bodyUnfound: false,
         meetingResult: null,
         gameOver: null,
         killAttempt: idleKillAttempt,
@@ -196,6 +205,7 @@ function reducer(state: State, action: Action): State {
         myTasks: [],
         fellowImpostors: [],
         dead: false,
+        bodyUnfound: false,
         meetingResult: null,
         gameOver: null,
         killAttempt: idleKillAttempt,
@@ -252,6 +262,7 @@ interface GameApi extends State {
   sheriffShoot: (targetId: string) => void;
   engineerVent: () => void;
   callMeeting: (reason: MeetingReason) => void;
+  reportBody: (bodyId: string) => void;
   castVote: (targetId: string | 'skip') => void;
   playAgain: () => void;
   dismissMeetingResult: () => void;
@@ -313,12 +324,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     function onMeetingCalled() {
       alertMeetingCalled();
+      dispatch({ type: 'body_found' });
     }
     function onVent(payload: { durationMs: number }) {
       alertVent();
       dispatch({ type: 'vent', durationMs: payload.durationMs });
     }
     function onMeetingResult(result: MeetingResult) {
+      if (result.eliminatedId) playEjectWhoosh();
       dispatch({ type: 'meeting_result', result });
     }
     function onGameOver(info: GameOverInfo) {
@@ -572,6 +585,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         socket.emit('engineer_vent');
       },
       callMeeting: (reason: MeetingReason) => socket.emit('call_meeting', { reason }),
+      reportBody: (bodyId: string) => socket.emit('report_body', { bodyId }),
       castVote: (targetId: string | 'skip') => socket.emit('cast_vote', { targetId }),
       playAgain: () => socket.emit('play_again'),
       dismissMeetingResult,

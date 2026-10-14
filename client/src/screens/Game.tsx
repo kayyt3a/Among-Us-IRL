@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   Siren,
   Skull,
+  Volume2,
+  VolumeX,
   Sofa,
   Star,
   Trees,
@@ -37,6 +39,7 @@ import Avatar from '../components/ui/Avatar';
 import Sheet from '../components/ui/Sheet';
 import { ProgressBar } from '../components/ui/Controls';
 import { downscaleImageToDataUrl } from '../utils/image';
+import { useAmbienceMuted } from '../audio/ambience';
 
 const ROOMS: Record<RoomType, { label: string; Icon: LucideIcon }> = {
   kitchen: { label: 'Kitchen', Icon: CookingPot },
@@ -140,6 +143,8 @@ export default function Game() {
   const [uploadingTaskId, setUploadingTaskId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [roleHidden, setRoleHidden] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [soundtrackMuted, setSoundtrackMuted] = useAmbienceMuted();
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const commonTask = game.myTasks.find((t) => t.common) ?? null;
@@ -198,6 +203,9 @@ export default function Game() {
   const killTargets = inRound.filter((p) => p.id !== myId);
   const protectTargets = inRound.filter((p) => p.status === 'alive');
   const shootTargets = inRound.filter((p) => p.id !== myId && p.status === 'alive');
+  // Everyone else in the round, with no hint about who's dead: you report the
+  // body you actually found.
+  const reportTargets = inRound.filter((p) => p.id !== myId);
 
   const attemptInFlight = game.killAttempt.status === 'pending' || game.killAttempt.status === 'listening';
   const killReady = now >= game.killAvailableAt && !attemptInFlight;
@@ -223,6 +231,14 @@ export default function Game() {
             {room.code}
           </span>
           <div className="spacer" />
+          <button
+            className="icon-btn"
+            aria-label={soundtrackMuted ? 'Turn soundtrack on' : 'Turn soundtrack off'}
+            aria-pressed={!soundtrackMuted}
+            onClick={() => setSoundtrackMuted(!soundtrackMuted)}
+          >
+            {soundtrackMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+          </button>
           <span className="pill pill-lg tabular" aria-label={`${doneCount} of ${game.myTasks.length} tasks done`}>
             <ListChecks size={14} />
             {doneCount}/{game.myTasks.length}
@@ -256,9 +272,11 @@ export default function Game() {
               <Ghost size={30} />
             </div>
             <div className="stack-xs">
-              <h2 className="h2">You're a ghost</h2>
+              <h2 className="h2">{game.bodyUnfound ? "You've been eliminated" : "You're a ghost"}</h2>
               <p className="muted small">
-                Stay quiet about what you saw. You can still finish your tasks, but you can't call meetings or vote.
+                {game.bodyUnfound
+                  ? "Sit down where you are: you're the body now. Stay put and quiet until someone finds you or a meeting is called. Don't say who did it."
+                  : "Keep quiet about what you saw. You can still finish your tasks, but you can't call meetings or vote."}
               </p>
             </div>
             {canGuardianProtect && (
@@ -459,13 +477,51 @@ export default function Game() {
                 )}
               </div>
             )}
-            <button className="btn btn-amber btn-lg btn-block" onClick={() => game.callMeeting('emergency')}>
-              <Siren size={19} />
-              Call meeting
-            </button>
+            <div className="grid-2">
+              <button className="btn btn-danger btn-lg btn-block" onClick={() => setReporting(true)}>
+                <Skull size={19} />
+                Report body
+              </button>
+              <button className="btn btn-amber btn-lg btn-block" onClick={() => game.callMeeting('emergency')}>
+                <Siren size={19} />
+                Call meeting
+              </button>
+            </div>
           </div>
         )}
       </div>
+
+      {reporting && (
+        <Sheet
+          title="Report a body"
+          description="Found someone who's been eliminated? Pick who it is. Reporting is free and doesn't use up your meeting."
+          icon={
+            <div className="icon-circle red">
+              <Skull size={20} />
+            </div>
+          }
+          onClose={() => setReporting(false)}
+        >
+          <div className="stack-sm">
+            {reportTargets.map((p) => (
+              <button
+                key={p.id}
+                className="choice"
+                onClick={() => {
+                  game.reportBody(p.id);
+                  setReporting(false);
+                }}
+              >
+                <Avatar name={p.name} />
+                {p.name}
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-ghost btn-block" onClick={() => setReporting(false)}>
+            Cancel
+          </button>
+        </Sheet>
+      )}
 
       {killing && (
         <Sheet
