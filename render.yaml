@@ -7,6 +7,8 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
+    # Only deploy a commit once its GitHub Actions checks are green.
+    autoDeployTrigger: checksPass
     healthCheckPath: /health
     envVars:
       - key: PORT

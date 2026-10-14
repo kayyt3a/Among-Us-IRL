@@ -8,14 +8,38 @@ import type { ClientToServerEvents, PrivateGameInfo, ServerToClientEvents } from
 import { PROXIMITY_FREQUENCIES_HZ } from '@irl-impostor/shared';
 import { GameRoom } from './gameRoom';
 import { generateRoomCode } from './roomCode';
-import { MAX_PLAYERS, ROOM_IDLE_CLEANUP_MS, SABOTAGE_DRAIN_TICK_MS, VENT_DURATION_MS } from './constants';
+import {
+  FAILED_JOINS_PER_IP_PER_MINUTE,
+  MAX_CONNECTIONS_PER_IP,
+  MAX_PLAYERS,
+  MAX_ROOMS,
+  MAX_SOCKET_MESSAGE_BYTES,
+  MAX_TOTAL_PHOTO_CHARS,
+  ROOM_CREATES_PER_IP_PER_MINUTE,
+  ROOM_EMPTY_CLEANUP_MS,
+  ROOM_IDLE_CLEANUP_MS,
+  SABOTAGE_DRAIN_TICK_MS,
+  SOCKET_EVENT_BURST,
+  SOCKET_EVENTS_PER_SECOND,
+  VENT_DURATION_MS,
+} from './constants';
+import { RateLimiter, clientIp, guardEvents, isExemptIp, isString } from './protection';
 import type { ServerPlayer } from './internalTypes';
 
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
 
 const app = express();
+app.disable('x-powered-by');
 app.use(cors({ origin: CLIENT_ORIGIN }));
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  // The game needs the mic (kill check) and camera (photo proof), nothing else.
+  res.setHeader('Permissions-Policy', 'microphone=(self), camera=(self), geolocation=()');
+  next();
+});
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 const clientDist = path.join(__dirname, '../../client/dist');
@@ -65,7 +89,37 @@ function escapeAttr(value: string): string {
 const httpServer = http.createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: { origin: CLIENT_ORIGIN },
+  // Socket.IO's default is 1 MB. Nothing legitimate is bigger than one photo.
+  maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
 });
+
+// ---------- Abuse protection ----------
+const floodLimiter = new RateLimiter(SOCKET_EVENT_BURST, SOCKET_EVENTS_PER_SECOND);
+const createLimiter = new RateLimiter(ROOM_CREATES_PER_IP_PER_MINUTE, ROOM_CREATES_PER_IP_PER_MINUTE / 60);
+const failedJoinLimiter = new RateLimiter(FAILED_JOINS_PER_IP_PER_MINUTE, FAILED_JOINS_PER_IP_PER_MINUTE / 60);
+const connectionsPerIp = new Map<string, number>();
+
+io.use((socket, next) => {
+  const ip = clientIp(socket);
+  if (isExemptIp(ip)) return next();
+  const count = connectionsPerIp.get(ip) ?? 0;
+  if (count >= MAX_CONNECTIONS_PER_IP) return next(new Error('Too many connections from this network.'));
+  connectionsPerIp.set(ip, count + 1);
+  socket.on('disconnect', () => {
+    const left = (connectionsPerIp.get(ip) ?? 1) - 1;
+    if (left <= 0) connectionsPerIp.delete(ip);
+    else connectionsPerIp.set(ip, left);
+  });
+  next();
+});
+
+setInterval(() => {
+  floodLimiter.sweep();
+  createLimiter.sweep();
+  failedJoinLimiter.sweep();
+}, 60_000).unref();
+
+const TOO_MANY_JOINS = 'Too many wrong codes. Wait a minute and try again.';
 
 const rooms = new Map<string, GameRoom>();
 interface SocketMeta {
@@ -281,8 +335,16 @@ function findRoomOrEmitError(socket: Socket<ClientToServerEvents, ServerToClient
 }
 
 io.on('connection', (socket) => {
+  guardEvents(socket, floodLimiter);
+  const ip = clientIp(socket);
+  const exempt = isExemptIp(ip);
+
   socket.on('create_room', ({ name }, cb) => {
-    if (!name || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
+    if (!isString(name) || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
+    if (rooms.size >= MAX_ROOMS) return cb({ ok: false, error: 'The server is full right now. Try again in a few minutes.' });
+    if (!exempt && !createLimiter.take(ip)) {
+      return cb({ ok: false, error: 'Too many rooms created from this network. Wait a minute and try again.' });
+    }
     let code = generateRoomCode();
     while (rooms.has(code)) code = generateRoomCode();
 
@@ -298,12 +360,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join_room', ({ code, name }, cb) => {
-    const room = rooms.get((code || '').toUpperCase());
-    if (!room) return cb({ ok: false, error: 'Room not found.' });
+    if (!exempt && !failedJoinLimiter.has(ip)) return cb({ ok: false, error: TOO_MANY_JOINS });
+    const room = isString(code) ? rooms.get(code.toUpperCase()) : undefined;
+    if (!room) {
+      failedJoinLimiter.take(ip);
+      return cb({ ok: false, error: 'Room not found.' });
+    }
     if (room.state.playerOrder.length >= MAX_PLAYERS) {
       return cb({ ok: false, error: 'Room is full.' });
     }
-    if (!name || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
+    if (!isString(name) || !name.trim()) return cb({ ok: false, error: 'Name is required.' });
 
     const joiningMidRound = room.state.phase !== 'lobby';
     let player: ServerPlayer;
@@ -327,10 +393,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('rejoin_room', ({ code, playerId }, cb) => {
-    const room = rooms.get((code || '').toUpperCase());
-    if (!room) return cb({ ok: false, error: 'Room not found.' });
-    const player = room.state.players.get(playerId);
-    if (!player) return cb({ ok: false, error: 'Player not found in room.' });
+    // Same answer whether the room or the player is missing, so rejoin can't
+    // be used to probe which room codes exist. Not counted against the
+    // failed-join limit: after a server restart every phone on the network
+    // fails its rejoin at once.
+    const room = isString(code) ? rooms.get(code.toUpperCase()) : undefined;
+    const player = isString(playerId) ? room?.state.players.get(playerId) : undefined;
+    if (!room || !player) return cb({ ok: false, error: 'That game has ended.' });
 
     player.socketId = socket.id;
     player.connected = true;
@@ -558,6 +627,9 @@ io.on('connection', (socket) => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return cb({ ok: false });
     const { room, playerId } = ctx;
+    if (isString(photoDataUrl) && totalPhotoChars() + photoDataUrl.length > MAX_TOTAL_PHOTO_CHARS) {
+      return cb({ ok: false, error: 'The server is out of photo space. Ask the host to turn photo proof off.' });
+    }
     const res = room.submitTaskPhoto(playerId, taskId, photoDataUrl);
     if (!res.ok) {
       cb({ ok: false, error: res.error });
@@ -584,7 +656,7 @@ io.on('connection', (socket) => {
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
     const { room, playerId } = ctx;
-    const res = room.callMeeting(playerId, reason);
+    const res = room.callMeeting(playerId, reason === 'report' ? 'report' : 'emergency');
     if (!res.ok) {
       socket.emit('error_message', { message: res.error });
       return;
@@ -731,10 +803,21 @@ io.on('connection', (socket) => {
   });
 });
 
+function totalPhotoChars(): number {
+  let total = 0;
+  for (const room of rooms.values()) total += room.photoChars();
+  return total;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (now - room.state.lastActivity > ROOM_IDLE_CLEANUP_MS) {
+    const idleFor = now - room.state.lastActivity;
+    // Abandoned rooms (everyone gone for a while) are dropped well before the
+    // general idle sweep, so they can't pile up against MAX_ROOMS. A brief
+    // signal drop is fine: rejoining reconnects the player and touches the room.
+    const nobodyHere = ![...room.state.players.values()].some((p) => p.connected);
+    if (idleFor > ROOM_IDLE_CLEANUP_MS || (nobodyHere && idleFor > ROOM_EMPTY_CLEANUP_MS)) {
       clearMeetingTimers(code);
       clearKillAttemptTimer(code);
       clearGameClockTimer(code);
@@ -742,7 +825,12 @@ setInterval(() => {
       rooms.delete(code);
     }
   }
-}, 15 * 60 * 1000).unref();
+}, 60 * 1000).unref();
+
+// Safety net: a bug in a timer callback shouldn't end every game on the
+// server. Socket handlers are already guarded in guardEvents.
+process.on('uncaughtException', (err) => console.error('[server] uncaught exception:', err));
+process.on('unhandledRejection', (err) => console.error('[server] unhandled rejection:', err));
 
 httpServer.listen(PORT, () => {
   console.log(`IRL Impostor server listening on :${PORT}`);

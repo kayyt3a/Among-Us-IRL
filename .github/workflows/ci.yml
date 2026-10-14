@@ -1,0 +1,101 @@
+# Runs on every push and pull request. Render is set to deploy only once these
+# checks pass (autoDeployTrigger: checksPass in render.yaml), so a broken
+# commit never reaches the live site.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20 # same as the Dockerfile
+  PLAYWRIGHT_VERSION: 1.56.1
+
+jobs:
+  game-logic:
+    name: Build, lint and game tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
+
+      - name: Start the server
+        run: |
+          npm --workspace server start > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4000/health && exit 0; sleep 1; done
+          echo "server never came up"; cat server.log; exit 1
+
+      - run: npm run smoke
+      - run: npm run test:pacing
+      - run: npm run test:proximity
+      - run: npm run test:roles
+      - run: npm run test:hostcontrols
+      - run: npm run test:photoproof
+      - run: npm run test:abuse
+
+      - name: Server log
+        if: failure()
+        run: cat server.log
+
+  browser:
+    name: Browser tests (UI walkthrough, real Web Audio)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install -g playwright@${{ env.PLAYWRIGHT_VERSION }}
+          npx -y playwright@${{ env.PLAYWRIGHT_VERSION }} install --with-deps chromium
+
+      - name: Start the server
+        run: |
+          npm --workspace server start > server.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://localhost:4000/health && exit 0; sleep 1; done
+          echo "server never came up"; cat server.log; exit 1
+
+      - run: npm run test:audio
+      - run: npm run test:ui
+        env:
+          SHOTS: ${{ runner.temp }}/ui-shots
+
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: ${{ runner.temp }}/ui-shots
+          if-no-files-found: ignore
+
+      - name: Server log
+        if: failure()
+        run: cat server.log
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t irl-impostor .

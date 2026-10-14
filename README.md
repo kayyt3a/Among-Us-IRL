@@ -276,6 +276,54 @@ for misses and false alarms, and checks that one tap resumes a
 suspended audio context the way iOS needs. It needs Playwright and
 doesn't need the server.
 
+`scripts/abuse-test.mjs` (`npm run test:abuse`) plays a stranger
+trying to break things: every event sent with junk payloads, wrongly
+typed settings, guessing room codes, spamming room creation, flooding
+events, uploading non-image "photos", a 2 MB message and opening too
+many connections from one network. It checks the server shrugs all of
+it off and keeps running.
+
+`scripts/ui-test.mjs` (`npm run test:ui`) clicks through a whole game
+in headless Chromium with five players and a late spectator: every
+screen, sheet and overlay, with checks along the way. It needs a built
+client and the server running, and saves screenshots to `SHOTS` (a temp
+folder by default).
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+build, lint, every server test above, the two browser tests, and a
+Docker build. `render.yaml` sets `autoDeployTrigger: checksPass`, so
+Render only deploys a commit once all of that is green. If your Render
+service was created by hand rather than from the Blueprint, set
+**Settings > Build & Deploy > Auto-Deploy** to **After CI Checks Pass**.
+
+## Abuse protection
+
+The server is public, so it assumes some visitors will poke at it
+(`server/src/protection.ts`, limits in `server/src/constants.ts`):
+
+- Every socket handler is wrapped so a malformed message logs an error
+  instead of crashing the process (which would end every game on it),
+  and payloads are type-checked before use.
+- Per network: 10 new rooms a minute, 20 wrong room codes a minute
+  (so codes can't be brute-forced) and 120 open connections. These are
+  generous on purpose, since a whole campus can share one IP. Rejoin
+  gives the same answer for a missing room and a missing player, so it
+  can't be used to probe codes either.
+- Per connection: bursts of 40 events, 15 a second sustained. Far above
+  any real player; floods are dropped.
+- Messages over 640 KB are cut off. Photos must be inline JPEG, PNG or
+  WebP (no remote URLs that would load on everyone's phone), capped per
+  photo, per room and across the server.
+- At most 500 rooms at once, and rooms nobody is connected to are
+  dropped after 15 minutes.
+- Security headers on every page (no framing, no MIME sniffing, mic and
+  camera allowed only for the game itself).
+
+Local loopback is exempt from the per-network limits outside
+production, so the test suites can run back to back.
+
 ## Configuration
 
 Host-adjustable in the lobby: tasks per player (3–8), impostor count

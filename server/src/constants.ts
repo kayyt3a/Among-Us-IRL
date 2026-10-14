@@ -36,3 +36,15 @@ export const ROOM_IDLE_CLEANUP_MS = 4 * 60 * 60 * 1000; // sweep rooms idle for 
 // caps how much of a data URL string the server will hold per photo, so a
 // stray oversized upload can't balloon a room's in-memory footprint.
 export const MAX_TASK_PHOTO_CHARS = 500_000;
+
+// Abuse protection. Generous on purpose: a whole campus can share one IP.
+export const MAX_SOCKET_MESSAGE_BYTES = 640_000; // a bit above the biggest photo, so oversized uploads get cut off early
+export const MAX_ROOMS = 500;
+export const MAX_CONNECTIONS_PER_IP = 120;
+export const ROOM_CREATES_PER_IP_PER_MINUTE = 10;
+export const FAILED_JOINS_PER_IP_PER_MINUTE = 20; // wrong room codes, so codes can't be brute-forced
+export const SOCKET_EVENT_BURST = 40; // events a single connection can send at once
+export const SOCKET_EVENTS_PER_SECOND = 15; // sustained, far above any real player
+export const MAX_ROOM_PHOTO_CHARS = 25_000_000; // about 25 MB of photos per room per round
+export const MAX_TOTAL_PHOTO_CHARS = 150_000_000; // across every room, to stay inside a small server's memory
+export const ROOM_EMPTY_CLEANUP_MS = 15 * 60 * 1000; // a room nobody is connected to is dropped after 15 min

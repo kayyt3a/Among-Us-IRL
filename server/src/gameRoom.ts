@@ -28,6 +28,7 @@ import {
   KILL_COOLDOWN_MS,
   MAX_MEETINGS_PER_PLAYER,
   MAX_TASK_PHOTO_CHARS,
+  MAX_ROOM_PHOTO_CHARS,
   MEETING_COOLDOWN_MS,
   MEETING_DISCUSSION_MS,
   MEETING_VOTING_MS,
@@ -38,6 +39,9 @@ import {
   VENT_COOLDOWN_MS,
 } from './constants';
 import { GameRoomState, ServerPlayer } from './internalTypes';
+
+/** What a task photo has to look like: an inline base64 JPEG, PNG or WebP. */
+const PHOTO_DATA_URL = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+\/]+=*$/;
 
 type PrivateInfo = {
   role: 'crewmate' | 'impostor';
@@ -156,32 +160,34 @@ export class GameRoom {
     // The meeting spot is just a label, not something that affects role/task
     // assignment, so the host can change it any time, including mid-game if
     // the agreed spot stops working out.
-    if (partial.meetingSpot !== undefined) {
+    if (typeof partial.meetingSpot === 'string') {
       this.state.meetingSpot = partial.meetingSpot.trim().slice(0, 40);
       this.touch();
     }
-    if (partial.lateJoinersPlayNow !== undefined) {
+    if (typeof partial.lateJoinersPlayNow === 'boolean') {
       this.state.lateJoinersPlayNow = partial.lateJoinersPlayNow;
       this.touch();
     }
 
     if (this.state.phase !== 'lobby') return;
-    if (partial.tasksPerPlayer) {
+    if (typeof partial.tasksPerPlayer === 'number' && Number.isFinite(partial.tasksPerPlayer)) {
       this.state.tasksPerPlayer = Math.max(3, Math.min(8, Math.floor(partial.tasksPerPlayer)));
     }
-    if (partial.impostorCount) {
+    if (typeof partial.impostorCount === 'number' && Number.isFinite(partial.impostorCount)) {
       const maxImpostors = Math.max(1, Math.floor(this.state.playerOrder.length / 3));
       this.state.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(partial.impostorCount)));
     }
-    if (partial.judgeEnabled !== undefined) this.state.judgeEnabled = partial.judgeEnabled;
-    if (partial.guardianAngelEnabled !== undefined) {
+    if (typeof partial.judgeEnabled === 'boolean') this.state.judgeEnabled = partial.judgeEnabled;
+    if (typeof partial.guardianAngelEnabled === 'boolean') {
       this.state.guardianAngelEnabled = partial.guardianAngelEnabled;
     }
-    if (partial.sheriffEnabled !== undefined) this.state.sheriffEnabled = partial.sheriffEnabled;
-    if (partial.engineerEnabled !== undefined) this.state.engineerEnabled = partial.engineerEnabled;
-    if (partial.photoProofEnabled !== undefined) this.state.photoProofEnabled = partial.photoProofEnabled;
-    if (partial.customTasks !== undefined) {
+    if (typeof partial.sheriffEnabled === 'boolean') this.state.sheriffEnabled = partial.sheriffEnabled;
+    if (typeof partial.engineerEnabled === 'boolean') this.state.engineerEnabled = partial.engineerEnabled;
+    if (typeof partial.photoProofEnabled === 'boolean') this.state.photoProofEnabled = partial.photoProofEnabled;
+    if (Array.isArray(partial.customTasks)) {
       this.state.customTasks = partial.customTasks
+        .slice(0, MAX_CUSTOM_TASKS * 2)
+        .filter((t): t is string => typeof t === 'string')
         .map((t) => t.trim().slice(0, MAX_CUSTOM_TASK_LENGTH))
         .filter(Boolean)
         .slice(0, MAX_CUSTOM_TASKS);
@@ -363,8 +369,17 @@ export class GameRoom {
     if (!task) {
       return { ok: false, error: 'Task not found.' };
     }
+    // Only an inline image is accepted. Anything else (a remote URL, say)
+    // would load on every other player's phone in the recap gallery.
+    if (typeof photoDataUrl !== 'string' || !PHOTO_DATA_URL.test(photoDataUrl)) {
+      return { ok: false, error: "That photo couldn't be read. Try taking it again." };
+    }
     if (photoDataUrl.length > MAX_TASK_PHOTO_CHARS) {
       return { ok: false, error: 'Photo is too large.' };
+    }
+    const previous = this.state.taskPhotos.get(taskId)?.photoDataUrl.length ?? 0;
+    if (this.photoChars() - previous + photoDataUrl.length > MAX_ROOM_PHOTO_CHARS) {
+      return { ok: false, error: 'This room is out of photo space. Ask the host to turn photo proof off.' };
     }
     task.done = true;
     this.state.taskPhotos.set(taskId, {
@@ -377,6 +392,13 @@ export class GameRoom {
     });
     this.touch();
     return { ok: true };
+  }
+
+  /** How much photo data this room is holding, in characters of data URL. */
+  photoChars(): number {
+    let total = 0;
+    for (const p of this.state.taskPhotos.values()) total += p.photoDataUrl.length;
+    return total;
   }
 
   /** Every submitted task photo this round, for the end-of-game recap. */
@@ -574,6 +596,9 @@ export class GameRoom {
     const player = this.state.players.get(playerId);
     if (!player || player.isSpectator) {
       return { ok: false, error: "Spectators can't help with this." };
+    }
+    if ((wordIndex !== 0 && wordIndex !== 1) || typeof guess !== 'string' || guess.length > 40) {
+      return { ok: false, error: 'Not quite.' };
     }
     if (puzzle.solved[wordIndex]) {
       return { ok: false, error: 'That word is already solved.' };
