@@ -919,24 +919,6 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
-.steps {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 8px;
-  text-align: center;
-  border-radius: var(--r-md);
-  border: 1px solid var(--line);
-  background: rgba(15, 17, 26, 0.6);
-}
-
 /* ------------------------------------------------------------------ */
 /* In-game                                                             */
 /* ------------------------------------------------------------------ */
@@ -1776,4 +1758,291 @@ img {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Connection banner                                                   */
+/* ------------------------------------------------------------------ */
+
+.connection-banner {
+  position: fixed;
+  left: 50%;
+  top: max(12px, env(safe-area-inset-top));
+  z-index: 950;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 456px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--amber-line);
+  background: rgba(30, 24, 10, 0.94);
+  color: var(--amber);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow-2);
+  backdrop-filter: blur(8px);
+  animation: toast-in 0.3s var(--ease-out);
+}
+
+.mic-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mic-ready {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--green-line);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ */
+/* Home landing                                                        */
+/* ------------------------------------------------------------------ */
+
+.home {
+  gap: 0;
+}
+
+/* The hero fills the first screen; everything else is below the fold. */
+.home-hero {
+  min-height: calc(100svh - 96px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+}
+
+.landing {
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+  padding-bottom: 12px;
+}
+
+.landing-more {
+  align-self: center;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  animation: nudge 2.4s ease-in-out infinite;
+}
+
+@keyframes nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.landing-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-margin-top: 24px;
+}
+
+.landing-section .label {
+  color: var(--red);
+}
+
+.landing-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.landing-steps li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.landing-steps b,
+.showcase-item b {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.landing-steps span,
+.showcase-item figcaption span {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+/* A sideways-scrolling strip of real screenshots. */
+.showcase {
+  display: flex;
+  gap: 14px;
+  margin: 0 -16px;
+  padding: 4px 16px 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.showcase::-webkit-scrollbar {
+  display: none;
+}
+
+.showcase-item {
+  flex: 0 0 74%;
+  margin: 0;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.showcase-frame {
+  aspect-ratio: 3 / 4;
+  border-radius: 24px;
+  padding: 6px;
+  background: linear-gradient(160deg, #2a2f40, #11131b);
+  box-shadow: var(--shadow-2), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.showcase-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 19px;
+  display: block;
+  background: var(--bg);
+}
+
+.landing-roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.landing-role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+}
+
+.landing-role p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.landing-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--text-3);
+  font-size: 13.5px;
+}
+
+.landing-extras span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.faq {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.faq details + details {
+  border-top: 1px solid var(--line);
+}
+
+.faq summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: '+';
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.faq details[open] summary::after {
+  content: '\2212';
+}
+
+.faq details p {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.landing-cta {
+  text-align: center;
+  gap: 12px;
+  padding: 24px 0 4px;
+}
+
+.landing-cta h2 {
+  margin-bottom: 6px;
+}
+
+.landing-footer {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.landing-footer p {
+  margin: 4px 0;
 }

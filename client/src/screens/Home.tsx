@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, BookOpen, ChevronLeft, House, KeyRound, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronLeft, KeyRound, Sparkles } from 'lucide-react';
 import { useGame } from '../state/GameProvider';
 import Logo from '../components/ui/Logo';
 import HowToPlay from '../components/HowToPlay';
+import HomeLanding from '../components/HomeLanding';
 
 function codeFromUrl(): string {
   const code = new URLSearchParams(window.location.search).get('code') ?? '';
@@ -38,52 +39,34 @@ export default function Home() {
 
   if (mode === 'root') {
     return (
-      <div className="screen" style={{ justifyContent: 'center', gap: 28 }}>
-        <div className="stack center" style={{ alignItems: 'center', gap: 18 }}>
-          <Logo size={84} />
-          <div className="stack-sm">
-            <h1 className="display">IRL Imposter</h1>
-            <p className="muted" style={{ fontSize: 16, maxWidth: 300, margin: '0 auto' }}>
-              The social deduction party game you play in a real house, with real friends.
-            </p>
-          </div>
-        </div>
-
-        <div className="stack">
-          <button className="btn btn-primary btn-lg btn-block" onClick={() => setMode('create')}>
-            Host a game
-            <ArrowRight size={18} />
-          </button>
-          <button className="btn btn-secondary btn-lg btn-block" onClick={() => setMode('join')}>
-            Join a game
-          </button>
-        </div>
-
-        <div className="steps">
-          <div className="step">
-            <div className="icon-circle red" style={{ width: 34, height: 34, borderRadius: 10 }}>
-              <Sparkles size={17} />
+      <div className="screen home">
+        <section className="home-hero">
+          <div className="stack center" style={{ alignItems: 'center', gap: 18 }}>
+            <Logo size={84} />
+            <div className="stack-sm">
+              <h1 className="display">IRL Imposter</h1>
+              <p className="muted" style={{ fontSize: 16, maxWidth: 300, margin: '0 auto' }}>
+                The social deduction party game you play in a real house, with real friends.
+              </p>
             </div>
-            <span className="tiny muted">One phone hosts a room</span>
           </div>
-          <div className="step">
-            <div className="icon-circle cyan" style={{ width: 34, height: 34, borderRadius: 10 }}>
-              <Users size={17} />
-            </div>
-            <span className="tiny muted">Friends join with the code</span>
-          </div>
-          <div className="step">
-            <div className="icon-circle amber" style={{ width: 34, height: 34, borderRadius: 10 }}>
-              <House size={17} />
-            </div>
-            <span className="tiny muted">Play around your house</span>
-          </div>
-        </div>
 
-        <button className="btn btn-ghost btn-block" onClick={() => setShowGuide(true)}>
-          <BookOpen size={17} />
-          How to play
-        </button>
+          <div className="stack">
+            <button className="btn btn-primary btn-lg btn-block" onClick={() => setMode('create')}>
+              Host a game
+              <ArrowRight size={18} />
+            </button>
+            <button className="btn btn-secondary btn-lg btn-block" onClick={() => setMode('join')}>
+              Join a game
+            </button>
+            <button className="btn btn-ghost btn-block" onClick={() => setShowGuide(true)}>
+              <BookOpen size={17} />
+              How to play
+            </button>
+          </div>
+        </section>
+
+        <HomeLanding onHost={() => setMode('create')} onJoin={() => setMode('join')} />
 
         {showGuide && <HowToPlay onClose={() => setShowGuide(false)} />}
       </div>

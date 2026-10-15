@@ -25,6 +25,7 @@ import RoomCode from '../components/ui/RoomCode';
 import { Stepper, Toggle } from '../components/ui/Controls';
 import { ROLE_INFO } from '../components/roles';
 import HowToPlay from '../components/HowToPlay';
+import MicCheck from '../components/MicCheck';
 
 const MAX_CUSTOM_TASKS = 20;
 const MEETING_SPOT_DEBOUNCE_MS = 400;
@@ -147,6 +148,8 @@ export default function Lobby() {
       {showGuide && <HowToPlay onClose={() => setShowGuide(false)} />}
 
       <RoomCode code={room.code} />
+
+      <MicCheck />
 
       <section className="stack-sm">
         <div className="section-header">

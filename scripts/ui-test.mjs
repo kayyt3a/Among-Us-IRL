@@ -80,8 +80,14 @@ const shot = async (page, name, full = true) => {
 // ---------- Home ----------
 const host = await newPlayer('Maya');
 await host.goto(BASE);
-await host.getByRole('button', { name: 'Host a game' }).waitFor();
+await host.getByRole('button', { name: 'Host a game' }).first().waitFor();
 await shot(host, '01-home', false);
+check((await host.locator('.faq details').count()) === 8, 'home page has the FAQ');
+check((await host.locator('.landing-role').count()) === 4, 'home page lists the special roles');
+await host.locator('.showcase').scrollIntoViewIfNeeded();
+await host.waitForFunction(() => [...document.querySelectorAll('.showcase img')].every((i) => i.complete && i.naturalWidth > 0));
+check(true, 'home page screenshots all load');
+await host.evaluate(() => window.scrollTo(0, 0));
 await host.getByRole('button', { name: 'How to play' }).click();
 await host.locator('.sheet .guide').waitFor();
 await shot(host, '01b-how-to-play', false);
@@ -89,7 +95,7 @@ check((await host.locator('.guide-role').count()) === 4, 'How to play explains a
 await host.getByRole('button', { name: 'Got it' }).click();
 check((await host.locator('.sheet').count()) === 0, 'How to play closes with Got it');
 check((await host.evaluate(() => window.__wl.active)) === 0, 'no wake lock on the home screen');
-await host.getByRole('button', { name: 'Host a game' }).click();
+await host.getByRole('button', { name: 'Host a game' }).first().click();
 await host.fill('#player-name', 'Maya');
 await shot(host, '02-host-form', false);
 await host.getByRole('button', { name: 'Create room' }).click();
@@ -111,7 +117,7 @@ for (const [i, n] of names.entries()) {
     await shot(p, '03-join-form-from-invite', false);
   } else {
     await p.goto(BASE);
-    await p.getByRole('button', { name: 'Join a game' }).click();
+    await p.getByRole('button', { name: 'Join a game' }).first().click();
     await p.fill('#room-code', code);
     await p.fill('#player-name', n);
   }
@@ -139,6 +145,7 @@ check((await host.locator('.stepper-value', { hasText: '25 min' }).count()) === 
 await host.getByRole('button', { name: 'Less game clock' }).click();
 await wait(250);
 check((await pages.Liam.getByText('Timers', { exact: true }).count()) === 1, 'guests see the round timers');
+check((await host.locator('.mic-card, .mic-ready').count()) === 1, 'lobby asks for the microphone with an explanation');
 await shot(host, '04-lobby-host');
 check((await host.evaluate(() => window.__wl.active)) === 1, 'exactly one screen wake lock held once in a room');
 // The browser drops the lock when the app is backgrounded; coming back should re-take it.
@@ -247,7 +254,7 @@ check((await pages[judgeName].locator('.toast-warning').count()) === 1, 'sabotag
 // ---------- Spectator (latecomer while latecomers are off) ----------
 const late = await newPlayer('Ava');
 await late.goto(BASE);
-await late.getByRole('button', { name: 'Join a game' }).click();
+await late.getByRole('button', { name: 'Join a game' }).first().click();
 await late.fill('#room-code', code);
 await late.fill('#player-name', 'Ava');
 await late.getByRole('button', { name: 'Join room' }).click();
@@ -296,7 +303,7 @@ await shot(host, '19-lightbox', false);
 await host.keyboard.press('Escape');
 await host.locator('.lightbox').waitFor({ state: 'detached' }).catch(() => {});
 await host.getByRole('button', { name: 'Leave' }).last().click();
-await host.getByRole('button', { name: 'Host a game' }).waitFor();
+await host.getByRole('button', { name: 'Host a game' }).first().waitFor();
 check((await host.evaluate(() => window.__wl.active)) === 0, 'wake lock released after leaving the room');
 
 writeFileSync(`${OUT}errors.json`, JSON.stringify(consoleErrors, null, 2));

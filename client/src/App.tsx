@@ -10,6 +10,7 @@ import GameOver from './screens/GameOver';
 import Spectator from './screens/Spectator';
 import BlackoutOverlay from './components/BlackoutOverlay';
 import Toast from './components/Toast';
+import ConnectionBanner from './components/ConnectionBanner';
 import MeetingResultOverlay from './components/MeetingResultOverlay';
 import { useScreenWakeLock } from './utils/wakeLock';
 import { useAmbience, useAmbienceMuted } from './audio/ambience';
@@ -65,6 +66,7 @@ export default function App() {
       <MeetingResultOverlay />
       <BlackoutOverlay />
       <Toast />
+      <ConnectionBanner />
     </>
   );
 }
