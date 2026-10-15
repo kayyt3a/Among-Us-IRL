@@ -242,8 +242,6 @@ itself).
 | `PUBLIC_URL` | The real address, e.g. `https://irlimposter.com`. Old `*.onrender.com` links redirect there (keeping `?code=` invites) and link previews use it. The Dockerfile sets it. |
 | `REDIS_URL` | Saves games so a deploy or restart doesn't end them. See below. |
 | `SENTRY_DSN` | Turns on Sentry error tracking for the server and the browser. |
-| `STATS_KEY` | Turns on the private stats dashboard at `/stats?key=<STATS_KEY>`. Pick any long random string. |
-| `STATS_TZ` | Time zone the stats days are counted in, e.g. `Australia/Sydney`. Defaults to UTC. |
 
 **Keeping games alive across deploys.** Without `REDIS_URL`, games
 live in memory and a deploy or restart ends every game in progress.
@@ -259,20 +257,6 @@ only empties the end-of-game gallery. To set it up:
 3. In Render, **Environment > Add Environment Variable**: `REDIS_URL`
    set to that URL, and save. Render redeploys and the log says
    `[persistence] saving games to Redis.`
-
-**Visitor stats.** Set `STATS_KEY` and open
-`https://irlimposter.com/stats?key=<your key>` (bookmark it). It shows
-today, the last 7 and 30 days, and a day-by-day table: unique
-visitors, page views, visits from Instagram (its in-app browser, an
-instagram.com referrer or `?utm_source=instagram`), invite links
-opened, rooms created, players joined, games started and finished,
-plus a visit-to-finished-game funnel. No cookies and no stored IPs:
-a unique visitor is a salted one-way hash of the day, IP and browser,
-counted with a Redis HyperLogLog, so nobody can be followed across
-days. Link previews and bots aren't counted. With `REDIS_URL` the
-numbers are kept for about a year; without it they reset on each
-deploy. `?format=json` returns the same data as JSON. Without
-`STATS_KEY`, `/stats` is a plain 404.
 
 **Error tracking.** Create a free project at [sentry.io](https://sentry.io)
 (platform: Node.js), copy its DSN, and add it in Render as

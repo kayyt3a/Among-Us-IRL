@@ -25,7 +25,7 @@ function check(cond, msg) {
 let server = null;
 async function startServer() {
   server = spawn('node', ['server/dist/index.js'], {
-    env: { ...process.env, PORT: String(PORT), REDIS_URL, NODE_ENV: 'test', STATS_KEY: 'test-stats-key' },
+    env: { ...process.env, PORT: String(PORT), REDIS_URL, NODE_ENV: 'test' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   server.stdout.on('data', (d) => process.env.VERBOSE && process.stdout.write(`[server] ${d}`));
@@ -63,13 +63,6 @@ async function main() {
   await redis.connect();
 
   await startServer();
-  const statsToday = async () => (await (await fetch(`${URL}/stats?key=test-stats-key&format=json`)).json())[0];
-  const statsBefore = await statsToday();
-  // One visit from Instagram's in-app browser, one plain one, and a link preview bot that shouldn't count.
-  await fetch(`${URL}/`, { headers: { 'user-agent': 'Mozilla/5.0 (iPhone) Instagram 300.0' } });
-  await fetch(`${URL}/?code=ABCD`, { headers: { 'user-agent': 'Mozilla/5.0 (iPhone) Safari' } });
-  await fetch(`${URL}/`, { headers: { 'user-agent': 'facebookexternalhit/1.1' } });
-
   console.log('=== Set up a game and get to a meeting ===');
   const phones = ['Maya', 'Liam', 'Priya', 'Noah'].map(phone);
   await Promise.all(phones.map((p) => new Promise((r) => p.socket.once('connect', r))));
@@ -132,20 +125,6 @@ async function main() {
   for (let i = 0; i < 20 && !phones[0].gameOver; i++) await wait(250);
   check(phones[0].result?.votes?.length === 4, 'result lists all four votes by name');
   check(phones[0].gameOver?.winner === 'crewmates', 'voting out the impostor still wins the game');
-
-  console.log('\n=== Stats survive the restart and add up ===');
-  const after = await statsToday();
-  const delta = (m) => after.counts[m] - statsBefore.counts[m];
-  check(delta('visits') === 2, `2 page views counted, the bot skipped (got ${delta('visits')})`);
-  check(delta('instagram') === 1, 'the Instagram visit is attributed to Instagram');
-  check(delta('invites') === 1, 'the invite link visit is counted');
-  check(delta('rooms') === 1 && delta('joins') === 3, 'room created and 3 joins counted');
-  check(delta('games') === 1 && delta('gamePlayers') === 4, 'game started with 4 players counted');
-  check(delta('finished') === 1, 'finished game counted');
-  check(after.visitors >= 1, 'unique visitors counted');
-  const noKey = await fetch(`${URL}/stats`);
-  const wrongKey = await fetch(`${URL}/stats?key=nope`);
-  check(noKey.status === 404 && wrongKey.status === 404, 'stats page is hidden without the right key');
 
   phones.forEach((p) => p.socket.close());
   await stopServer();

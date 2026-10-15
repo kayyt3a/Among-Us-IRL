@@ -28,8 +28,6 @@ import { RateLimiter, clientIp, guardEvents, isExemptIp, isString } from './prot
 import type { ServerPlayer } from './internalTypes';
 import { RoomSaver, openRoomStore } from './persistence';
 import { clientSentryDsn, reportError } from './monitoring';
-import { count, countVisit, initStats, readStats, statsKeyMatches } from './stats';
-import { renderStatsPage } from './statsPage';
 import type { GameOverInfo } from '@irl-impostor/shared';
 
 const PORT = Number(process.env.PORT) || 4000;
@@ -47,25 +45,6 @@ app.use((_req, res, next) => {
   next();
 });
 app.get('/health', (_req, res) => res.json({ ok: true }));
-
-// The private stats dashboard. Only exists when STATS_KEY is set, and only
-// answers to /stats?key=<that key>; anything else looks like a missing page.
-app.get('/stats', async (req, res) => {
-  if (!statsKeyMatches(req.query.key)) return res.status(404).type('text').send('Not found');
-  res.set('Cache-Control', 'no-store');
-  res.set('X-Robots-Tag', 'noindex');
-  const days = await readStats(30);
-  if (req.query.format === 'json') return res.json(days);
-  res.type('html').send(renderStatsPage(days));
-});
-
-/** The visitor's real IP behind Cloudflare / Render's proxy, used only to count unique visitors. */
-function httpClientIp(req: express.Request): string {
-  const pick = (v: string | undefined) => v?.split(',')[0]?.trim();
-  return (
-    pick(req.get('cf-connecting-ip')) || pick(req.get('true-client-ip')) || pick(req.get('x-forwarded-for')) || req.socket.remoteAddress || ''
-  );
-}
 
 // Send anyone on the old *.onrender.com address to the real domain (set
 // PUBLIC_URL, e.g. https://irlimposter.com), keeping the path and any
@@ -88,7 +67,6 @@ app.get('*', async (req, res, next) => {
   if (req.path.startsWith('/socket.io')) return next();
   try {
     const html = await readFile(path.join(clientDist, 'index.html'), 'utf8');
-    if (req.path === '/') countVisit(req, httpClientIp(req));
     res.type('html').send(withLinkPreview(html, req));
   } catch {
     next();
@@ -205,10 +183,9 @@ function clearSabotageDrainTimer(code: string) {
   }
 }
 
-/** Tells the room the game is over (and counts it for the stats page). */
+/** Tells the room the game is over. */
 function announceGameOver(code: string, info: GameOverInfo) {
   io.to(code).emit('game_over', info);
-  count('finished');
 }
 
 /** Each player gets their own view: impostors see real alive/dead status, crewmates don't (until a meeting). */
@@ -433,7 +410,6 @@ io.on('connection', (socket) => {
     socket.join(code);
 
     cb({ ok: true, code, playerId: player.id });
-    count('rooms');
     broadcastRoomUpdate(room);
   });
 
@@ -466,7 +442,6 @@ io.on('connection', (socket) => {
     socket.join(room.state.code);
 
     cb({ ok: true, code: room.state.code, playerId: player.id });
-    count('joins');
     if (lateInfo) socket.emit('game_started', lateInfo);
     broadcastRoomUpdate(room);
   });
@@ -528,8 +503,6 @@ io.on('connection', (socket) => {
       return;
     }
     room.startGame();
-    count('games');
-    count('gamePlayers', room.alivePlayers.length);
     for (const pid of room.state.playerOrder) {
       const p = room.state.players.get(pid);
       const info = room.getPrivateInfo(pid);
@@ -929,7 +902,6 @@ process.on('uncaughtException', (err) => reportError('[server] uncaught exceptio
 process.on('unhandledRejection', (err) => reportError('[server] unhandled rejection:', err));
 
 async function main() {
-  await initStats();
   const store = await openRoomStore();
   if (store) {
     saver = new RoomSaver(store);
