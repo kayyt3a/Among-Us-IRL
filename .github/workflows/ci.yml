@@ -57,6 +57,7 @@ jobs:
       - run: npm run test:photoproof
       - run: npm run test:abuse
       - run: npm run test:features
+      - run: npm run test:sabotage
       - name: Restart mid-game (Redis)
         run: npm run test:persistence
         env:

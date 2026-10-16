@@ -20,6 +20,8 @@ import {
   ShieldCheck,
   Siren,
   Skull,
+  LockKeyhole,
+  Shuffle,
   Volume2,
   VolumeX,
   Sofa,
@@ -144,6 +146,7 @@ export default function Game() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [roleHidden, setRoleHidden] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [choosingSabotage, setChoosingSabotage] = useState(false);
   const [soundtrackMuted, setSoundtrackMuted] = useAmbienceMuted();
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -360,7 +363,7 @@ export default function Game() {
                 label="Sabotage"
                 ready={sabotageReady}
                 status={sabotageStatus}
-                onClick={game.triggerSabotage}
+                onClick={() => setChoosingSabotage(true)}
               />
             </div>
           </section>
@@ -490,6 +493,55 @@ export default function Game() {
           </div>
         )}
       </div>
+
+      {choosingSabotage && (
+        <Sheet
+          title="Pick a sabotage"
+          description={`Everyone's screen shows it and the game clock runs 1.5x faster until the crew fixes it. ${game.sabotageUsesRemaining} left this game.`}
+          icon={
+            <div className="icon-circle red">
+              <Zap size={20} />
+            </div>
+          }
+          onClose={() => setChoosingSabotage(false)}
+        >
+          <div className="stack-sm">
+            {(
+              [
+                ['words', Shuffle, 'Scramble', 'Two scrambled words. Anyone can type the answers.'],
+                [
+                  'numbers',
+                  LockKeyhole,
+                  'Number lock',
+                  'Everyone alive must pick a different number from 1 to 15, adding up to a target. You can quietly mess it up.',
+                ],
+              ] as const
+            ).map(([kind, Icon, title, text]) => (
+              <button
+                key={kind}
+                className="choice sabotage-choice"
+                onClick={() => {
+                  game.triggerSabotage(kind);
+                  setChoosingSabotage(false);
+                }}
+              >
+                <span className="icon-circle red" style={{ width: 40, height: 40 }}>
+                  <Icon size={19} />
+                </span>
+                <span className="stack-xs" style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <b>{title}</b>
+                  <span className="muted small" style={{ fontWeight: 400 }}>
+                    {text}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <button className="btn btn-ghost btn-block" onClick={() => setChoosingSabotage(false)}>
+            Cancel
+          </button>
+        </Sheet>
+      )}
 
       {reporting && (
         <Sheet

@@ -16,6 +16,11 @@ import {
   TimerSetting,
   clampTimer,
   pickTwoSabotageWords,
+  pickNumberLockTarget,
+  numberLockRange,
+  NUMBER_LOCK_MAX,
+  SabotageKind,
+  SabotagePuzzle,
   PlayerRole,
   PlayerTask,
   PROXIMITY_FREQUENCIES_HZ,
@@ -555,15 +560,16 @@ export class GameRoom {
   }
 
   /**
-   * Spends a sabotage charge to start the unscramble minigame: two scrambled
-   * words the whole room can see. While either stays unsolved the shared
-   * clock drains at 1.5x. Solving both stops it and starts the cooldown.
+   * Spends a sabotage charge on one of two minigames the whole room sees:
+   * a scramble (two scrambled words) or a number lock (everyone alive enters
+   * a different number, together adding up to a target). While it's unsolved
+   * the shared clock drains at 1.5x. Solving it stops that and starts the
+   * cooldown.
    */
   triggerSabotage(
-    playerId: string
-  ):
-    | { ok: true; scrambled: [string, string]; usesRemaining: number }
-    | { ok: false; error: string } {
+    playerId: string,
+    kind: SabotageKind = 'words'
+  ): { ok: true; kind: SabotageKind; usesRemaining: number } | { ok: false; error: string } {
     const player = this.state.players.get(playerId);
     if (!player || player.role !== 'impostor' || player.status !== 'alive') {
       return { ok: false, error: 'Only a living impostor can do that.' };
@@ -584,13 +590,81 @@ export class GameRoom {
       return { ok: false, error: 'No active game clock.' };
     }
 
-    const words = pickTwoSabotageWords();
-    const scrambled: [string, string] = [scrambleWord(words[0]), scrambleWord(words[1])];
+    if (kind === 'numbers') {
+      this.state.sabotagePuzzle = {
+        kind: 'numbers',
+        target: pickNumberLockTarget(this.numberLockPlayers().length),
+        entries: {},
+      };
+    } else {
+      const words = pickTwoSabotageWords();
+      this.state.sabotagePuzzle = {
+        kind: 'words',
+        words,
+        scrambled: [scrambleWord(words[0]), scrambleWord(words[1])],
+        solved: [false, false],
+      };
+    }
     this.state.sabotageUsesRemaining -= 1;
-    this.state.sabotagePuzzle = { words, scrambled, solved: [false, false] };
     this.state.sabotageStartedAt = Date.now();
     this.touch();
-    return { ok: true, scrambled, usesRemaining: this.state.sabotageUsesRemaining };
+    return { ok: true, kind, usesRemaining: this.state.sabotageUsesRemaining };
+  }
+
+  /** Everyone who has to enter a number: alive, dealt into the round, and connected. */
+  private numberLockPlayers(): ServerPlayer[] {
+    return this.alivePlayers.filter((p) => p.connected);
+  }
+
+  /** The sabotage is over: clear it and start the cooldown. */
+  private finishSabotage() {
+    this.state.sabotagePuzzle = null;
+    this.state.sabotageStartedAt = null;
+    this.state.sabotageAvailableAt = Date.now() + SABOTAGE_COOLDOWN_MS;
+    this.touch();
+  }
+
+  /**
+   * A player's number for the active number lock (1 to NUMBER_LOCK_MAX).
+   * They can change it until the lock opens.
+   */
+  submitSabotageNumber(playerId: string, value: number): { ok: true; solved: boolean } | { ok: false; error: string } {
+    const puzzle = this.state.sabotagePuzzle;
+    if (!puzzle || puzzle.kind !== 'numbers') return { ok: false, error: 'No number lock in progress.' };
+    if (!this.isInPlay(this.state.players.get(playerId))) {
+      return { ok: false, error: 'Only living players can enter a number.' };
+    }
+    if (!Number.isInteger(value) || value < 1 || value > NUMBER_LOCK_MAX) {
+      return { ok: false, error: `Pick a number from 1 to ${NUMBER_LOCK_MAX}.` };
+    }
+    puzzle.entries[playerId] = value;
+    this.touch();
+    return { ok: true, solved: this.checkNumberLock() };
+  }
+
+  /**
+   * Keeps a number lock fair and finished: if players died, left or joined
+   * since it started and the target can no longer be hit (or is now too easy
+   * to make sense), it gets a new target. Returns true, and ends the
+   * sabotage, once every required player has entered a different number and
+   * they add up to the target.
+   */
+  checkNumberLock(): boolean {
+    const puzzle = this.state.sabotagePuzzle;
+    if (!puzzle || puzzle.kind !== 'numbers') return false;
+    const players = this.numberLockPlayers();
+    if (players.length === 0) return false;
+    const { min, max } = numberLockRange(players.length);
+    if (puzzle.target < min || puzzle.target > max) {
+      puzzle.target = pickNumberLockTarget(players.length);
+      this.touch();
+    }
+    const values = players.map((p) => puzzle.entries[p.id]);
+    if (values.some((v) => v === undefined)) return false;
+    if (new Set(values).size !== values.length) return false;
+    if (values.reduce((a, b) => a + b, 0) !== puzzle.target) return false;
+    this.finishSabotage();
+    return true;
   }
 
   /** Applies one tick of the accelerated clock drain while a sabotage puzzle is unsolved. */
@@ -607,7 +681,7 @@ export class GameRoom {
     guess: string
   ): { ok: true; wordIndex: 0 | 1; bothSolved: boolean } | { ok: false; error: string } {
     const puzzle = this.state.sabotagePuzzle;
-    if (!puzzle) return { ok: false, error: 'No sabotage in progress.' };
+    if (!puzzle || puzzle.kind !== 'words') return { ok: false, error: 'No sabotage in progress.' };
     const player = this.state.players.get(playerId);
     if (!player || player.isSpectator) {
       return { ok: false, error: "Spectators can't help with this." };
@@ -624,11 +698,7 @@ export class GameRoom {
 
     puzzle.solved[wordIndex] = true;
     const bothSolved = puzzle.solved[0] && puzzle.solved[1];
-    if (bothSolved) {
-      this.state.sabotagePuzzle = null;
-      this.state.sabotageStartedAt = null;
-      this.state.sabotageAvailableAt = Date.now() + SABOTAGE_COOLDOWN_MS;
-    }
+    if (bothSolved) this.finishSabotage();
     this.touch();
     return { ok: true, wordIndex, bothSolved };
   }
@@ -1196,9 +1266,25 @@ export class GameRoom {
       meeting: this.publicMeeting(),
       gameEndsAt: this.state.gameEndsAt,
       crewTaskProgress: this.crewTaskProgress(),
-      sabotagePuzzle: this.state.sabotagePuzzle
-        ? { scrambled: this.state.sabotagePuzzle.scrambled, solved: this.state.sabotagePuzzle.solved }
-        : null,
+      sabotagePuzzle: this.publicSabotagePuzzle(viewerId),
+    };
+  }
+
+  /** The sabotage as a player sees it: never the real words, and number lock entries without names. */
+  private publicSabotagePuzzle(viewerId?: string): SabotagePuzzle | null {
+    const puzzle = this.state.sabotagePuzzle;
+    if (!puzzle) return null;
+    if (puzzle.kind === 'words') return { kind: 'words', scrambled: puzzle.scrambled, solved: puzzle.solved };
+    const players = this.numberLockPlayers();
+    return {
+      kind: 'numbers',
+      target: puzzle.target,
+      entered: players
+        .map((p) => puzzle.entries[p.id])
+        .filter((v): v is number => v !== undefined)
+        .sort((a, b) => a - b),
+      needed: players.length,
+      myNumber: viewerId ? (puzzle.entries[viewerId] ?? null) : null,
     };
   }
 

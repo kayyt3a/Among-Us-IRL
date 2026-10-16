@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  SabotageKind,
   GameOverInfo,
   MeetingReason,
   MeetingResult,
@@ -253,7 +254,8 @@ interface GameApi extends State {
   attemptKill: (targetId: string, targetName: string) => void;
   cancelKillAttempt: () => void;
   triggerVent: () => void;
-  triggerSabotage: () => void;
+  triggerSabotage: (kind: SabotageKind) => void;
+  submitSabotageNumber: (value: number) => Promise<{ ok: boolean; error?: string }>;
   submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) => Promise<boolean>;
   submitTaskPhoto: (taskId: string, photoDataUrl: string) => Promise<{ ok: boolean; error?: string }>;
   fetchTaskPhotos: () => Promise<TaskPhoto[]>;
@@ -392,9 +394,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     function onVentStatus(payload: { availableAt: number }) {
       dispatch({ type: 'vent_status', availableAt: payload.availableAt });
     }
-    function onSabotageTriggered() {
+    function onSabotageTriggered(payload: { kind: SabotageKind }) {
       alertSabotage();
-      dispatch({ type: 'error', message: 'Sabotage! Unscramble both words to stop the clock draining.', kind: 'warning' });
+      const message =
+        payload?.kind === 'numbers'
+          ? 'Sabotage! Number lock: everyone alive picks a different number. Hit the target to stop the clock draining.'
+          : 'Sabotage! Unscramble both words to stop the clock draining.';
+      dispatch({ type: 'error', message, kind: 'warning' });
     }
     function onSabotageWordSolved() {
       alertSabotageWordSolved();
@@ -552,7 +558,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'kill_attempt_cancel' });
       },
       triggerVent: () => socket.emit('trigger_vent'),
-      triggerSabotage: () => socket.emit('trigger_sabotage'),
+      triggerSabotage: (kind: SabotageKind) => socket.emit('trigger_sabotage', { kind }),
+      submitSabotageNumber: (value: number) =>
+        new Promise((resolve) => {
+          socket.emit('submit_sabotage_number', { value }, (res) => resolve(res));
+        }),
       submitUnscrambleGuess: (wordIndex: 0 | 1, guess: string) =>
         new Promise<boolean>((resolve) => {
           socket.emit('submit_unscramble', { wordIndex, guess }, (res) => resolve(res.ok));

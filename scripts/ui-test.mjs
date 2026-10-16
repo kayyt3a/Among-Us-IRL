@@ -246,6 +246,10 @@ await shot(imp, '12-game-impostor-cooldowns');
 
 // ---------- Sabotage + toast ----------
 await imp.getByRole('button', { name: /Sabotage/ }).click();
+await imp.locator('.sheet').waitFor();
+check((await imp.locator('.sabotage-choice').count()) === 2, 'impostor picks between two sabotages');
+await shot(imp, '12b-sabotage-choice', false);
+await imp.getByRole('button', { name: /Scramble/ }).click();
 await pages[judgeName].locator('.sabotage').waitFor();
 await wait(250);
 await shot(pages[judgeName], '13-game-sabotage-toast', false);

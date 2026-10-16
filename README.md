@@ -78,11 +78,17 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     lobby, along with discussion time, voting time and the kill
     cooldown) runs the whole
     match. If it hits zero, the impostors win by default. The
-    impostor has a handful of **sabotage** charges (with a cooldown
-    between uses); spending one shows two scrambled words to the
-    whole room, and while they're unsolved the clock drains at 1.5x
-    speed. Anyone can type guesses, and solving both words stops the
-    drain and starts the cooldown. No reactor/O2 stations to physically
+    impostor has three **sabotage** charges (with a cooldown
+    between uses) and picks one of two each time. A **scramble** shows
+    two scrambled words to the whole room; anyone can type guesses. A
+    **number lock** shows a target: every living player taps a
+    different number from 1 to 15, and together they must add up to
+    exactly the target. Picks show without names, so a double-up is
+    visible but not who made it (the impostor has to pick too, and can
+    quietly cause trouble). The target is always reachable for the
+    number of players alive and moves if someone dies or joins
+    mid-lock. Either way the clock drains at 1.5x until it's fixed,
+    then the cooldown starts. No reactor/O2 stations to physically
     go stand at, just a shared puzzle and real pressure everyone can
     watch ticking down.
 12. Four optional roles, toggled by the host before starting: the
@@ -333,6 +339,11 @@ reporting a body (wrong reports refused with a wait, real ones
 starting a meeting that names the body, not using up the reporter's
 emergency meeting, and no reporting the same body twice), the vote
 breakdown in the result, and the hidden-role house rule.
+
+`scripts/sabotage-test.mjs` (`npm run test:sabotage`) covers the
+number lock: a reachable target, picks without names, double-ups and
+wrong totals keeping it locked, a kill mid-lock shrinking who has to
+pick, and the right combination opening it.
 
 `scripts/persistence-test.mjs` (`npm run test:persistence`) starts its
 own server with Redis, sets up a game in the middle of a meeting,

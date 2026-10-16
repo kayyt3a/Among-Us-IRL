@@ -90,7 +90,11 @@ export interface GameRoomState {
   sabotageUsesRemaining: number;
   sabotageAvailableAt: number;
   /** The active sabotage puzzle, including the real words (never sent to clients until solved). */
-  sabotagePuzzle: { words: [string, string]; scrambled: [string, string]; solved: [boolean, boolean] } | null;
+  sabotagePuzzle:
+    | { kind: 'words'; words: [string, string]; scrambled: [string, string]; solved: [boolean, boolean] }
+    // A plain object rather than a Map so it saves to Redis as is.
+    | { kind: 'numbers'; target: number; entries: Record<string, number> }
+    | null;
   sabotageStartedAt: number | null;
   judgeId: string | null;
   guardianAngelId: string | null;

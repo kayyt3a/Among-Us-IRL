@@ -74,6 +74,7 @@ const ACK_EVENTS = new Set([
   'join_room',
   'rejoin_room',
   'submit_unscramble',
+  'submit_sabotage_number',
   'submit_task_photo',
   'get_task_photos',
 ]);

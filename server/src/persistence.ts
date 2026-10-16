@@ -55,6 +55,9 @@ export function fromSnapshot(json: string): GameRoom {
   room.state.meeting = meeting ? { ...meeting, votes: new Map(meeting.votes), bodyId: meeting.bodyId ?? null } : null;
   room.state.taskPhotos = new Map();
   room.state.meetingTimer = null;
+  // Saved before there was more than one kind of sabotage.
+  const puzzle = room.state.sabotagePuzzle as { kind?: string } | null;
+  if (puzzle && !puzzle.kind) puzzle.kind = 'words';
   // An in-flight kill check can't survive a restart (its timer and the
   // listening phone are gone), so it's dropped and the impostor can try again.
   room.state.pendingKill = null;

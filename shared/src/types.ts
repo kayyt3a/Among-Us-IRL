@@ -138,11 +138,37 @@ export interface MeetingResult {
   judgeMisfired?: boolean;
 }
 
-/** The live sabotage minigame: two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
-export interface SabotagePuzzle {
+/** The two kinds of sabotage the impostor can pick from. */
+export type SabotageKind = 'words' | 'numbers';
+
+/** Highest number anyone can enter in a number lock. 15 so a full 15-player game always has enough different numbers. */
+export const NUMBER_LOCK_MAX = 15;
+
+/** Scramble: two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
+export interface WordsPuzzle {
+  kind: 'words';
   scrambled: [string, string];
   solved: [boolean, boolean];
 }
+
+/**
+ * Number lock: every living player enters a different number from 1 to
+ * NUMBER_LOCK_MAX, and together they have to add up to `target`. Entries are
+ * shown without names, so a double-up is visible but not who made it.
+ */
+export interface NumbersPuzzle {
+  kind: 'numbers';
+  target: number;
+  /** Every number entered so far, sorted, duplicates included. */
+  entered: number[];
+  /** How many players have to enter a number (everyone alive in the round). */
+  needed: number;
+  /** The viewer's own entry, if they've made one. */
+  myNumber: number | null;
+}
+
+/** The live sabotage minigame. */
+export type SabotagePuzzle = WordsPuzzle | NumbersPuzzle;
 
 /** Why the round ended, so the recap can say so plainly. */
 export type GameOverReason = 'impostors-caught' | 'tasks-complete' | 'impostors-outnumber' | 'time-up';
@@ -200,7 +226,7 @@ export interface ServerToClientEvents {
   /** Impostor-only: when they're next allowed to vent. Available at round start, then a cooldown after each use. Independent of kill_status. */
   vent_status: (payload: { availableAt: number }) => void;
   /** Broadcast to everyone the instant a sabotage lands, so the clock jump has a beat to it. */
-  sabotage_triggered: () => void;
+  sabotage_triggered: (payload: { kind: SabotageKind }) => void;
   /** Broadcast when either word in the active sabotage puzzle gets solved. */
   sabotage_word_solved: (payload: { wordIndex: 0 | 1 }) => void;
   /** Broadcast when both words are solved and the sabotage's accelerated drain stops. */
@@ -246,7 +272,9 @@ export interface ClientToServerEvents {
   cast_vote: (payload: { targetId: string | 'skip' }) => void;
   play_again: () => void;
   /** Impostor-only: spend a sabotage charge to start the unscramble minigame. */
-  trigger_sabotage: () => void;
+  trigger_sabotage: (payload?: { kind?: SabotageKind }) => void;
+  /** Your number for an active number lock. Can be changed until it's solved. */
+  submit_sabotage_number: (payload: { value: number }, cb: (res: { ok: boolean; error?: string }) => void) => void;
   /** Anyone's guess at one of the two active sabotage words. */
   submit_unscramble: (
     payload: { wordIndex: 0 | 1; guess: string },

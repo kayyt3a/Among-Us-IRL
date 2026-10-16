@@ -2046,3 +2046,117 @@ img {
 .landing-footer p {
   margin: 4px 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* Number lock sabotage                                                */
+/* ------------------------------------------------------------------ */
+
+.lock-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.lock-scoreboard > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+}
+
+.lock-target {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--red);
+}
+
+.lock-total {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.lock-total.ok {
+  color: var(--green);
+}
+
+.lock-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lock-chip {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-chip.dupe {
+  color: var(--red);
+  border-color: var(--red-line);
+  background: var(--red-soft);
+}
+
+.lock-chip small {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.lock-pad {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.lock-key {
+  appearance: none;
+  height: 52px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.lock-key:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.lock-key.selected {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(242, 71, 90, 0.35);
+}
+
+.lock-key:disabled {
+  opacity: 0.6;
+}
+
+.sabotage-choice {
+  align-items: flex-start;
+  min-height: 0;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  white-space: normal;
+}

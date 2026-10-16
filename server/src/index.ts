@@ -275,6 +275,12 @@ function startSabotageDrainTimer(room: GameRoom) {
     const elapsed = now - lastTick;
     lastTick = now;
     room.applySabotageDrainTick(elapsed);
+    // A number lock can open without anyone typing: someone who hadn't
+    // entered a number dies or leaves, and the rest already add up.
+    if (room.checkNumberLock()) {
+      endSabotage(room);
+      return;
+    }
     broadcastRoomUpdate(room);
     if (room.isGameClockExpired()) {
       clearSabotageDrainTimer(code);
@@ -286,6 +292,15 @@ function startSabotageDrainTimer(room: GameRoom) {
     }
   }, SABOTAGE_DRAIN_TICK_MS);
   sabotageDrainTimers.set(code, timer);
+}
+
+/** A sabotage was solved: stop the fast drain and put the normal clock back. */
+function endSabotage(room: GameRoom) {
+  clearSabotageDrainTimer(room.state.code);
+  io.to(room.state.code).emit('sabotage_stopped');
+  scheduleGameClock(room);
+  sendSabotageStatus(room);
+  broadcastRoomUpdate(room);
 }
 
 function finishMeeting(
@@ -643,11 +658,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('trigger_sabotage', () => {
+  socket.on('trigger_sabotage', (payload) => {
+    const kind = payload?.kind;
     const ctx = findRoomOrEmitError(socket);
     if (!ctx) return;
     const { room, playerId } = ctx;
-    const res = room.triggerSabotage(playerId);
+    const res = room.triggerSabotage(playerId, kind === 'numbers' ? 'numbers' : 'words');
     if (!res.ok) {
       socket.emit('error_message', { message: res.error });
       return;
@@ -655,9 +671,20 @@ io.on('connection', (socket) => {
     // The drain timer now owns clock-expiry checks while the puzzle is up.
     clearGameClockTimer(room.state.code);
     startSabotageDrainTimer(room);
-    io.to(room.state.code).emit('sabotage_triggered');
+    io.to(room.state.code).emit('sabotage_triggered', { kind: res.kind });
     broadcastRoomUpdate(room);
     sendSabotageStatus(room);
+  });
+
+  socket.on('submit_sabotage_number', ({ value }, cb) => {
+    const ctx = findRoomOrEmitError(socket);
+    if (!ctx) return cb({ ok: false });
+    const { room, playerId } = ctx;
+    const res = room.submitSabotageNumber(playerId, typeof value === 'number' ? value : NaN);
+    if (!res.ok) return cb({ ok: false, error: res.error });
+    cb({ ok: true });
+    if (res.solved) endSabotage(room);
+    else broadcastRoomUpdate(room);
   });
 
   socket.on('submit_unscramble', ({ wordIndex, guess }, cb) => {
