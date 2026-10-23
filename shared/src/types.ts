@@ -141,8 +141,8 @@ export interface MeetingResult {
 /** The two kinds of sabotage the impostor can pick from. */
 export type SabotageKind = 'words' | 'numbers';
 
-/** Highest number anyone can enter in a number lock. 15 so a full 15-player game always has enough different numbers. */
-export const NUMBER_LOCK_MAX = 15;
+/** The most a number lock keypad ever goes up to (the player cap). Each lock uses numberLockMaxFor(players), which is smaller for small games. */
+export const NUMBER_LOCK_MAX = 50;
 
 /** Scramble: two scrambled words the whole room can see and race to solve. Never carries the real words before they're solved. */
 export interface WordsPuzzle {
@@ -165,6 +165,8 @@ export interface NumbersPuzzle {
   needed: number;
   /** The viewer's own entry, if they've made one. */
   myNumber: number | null;
+  /** Highest number on this lock's keypad: 15 in small games, more in big ones. */
+  maxNumber: number;
 }
 
 /** The live sabotage minigame. */

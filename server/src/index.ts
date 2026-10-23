@@ -13,6 +13,7 @@ import {
   FAILED_JOINS_PER_IP_PER_MINUTE,
   MAX_CONNECTIONS_PER_IP,
   MAX_PLAYERS,
+  ROOM_UPDATE_BATCH_MS,
   MAX_ROOMS,
   MAX_SOCKET_MESSAGE_BYTES,
   MAX_TOTAL_PHOTO_CHARS,
@@ -189,7 +190,24 @@ function announceGameOver(code: string, info: GameOverInfo) {
 }
 
 /** Each player gets their own view: impostors see real alive/dead status, crewmates don't (until a meeting). */
+/**
+ * Sends each player the room as they're allowed to see it. Calls within a
+ * short window are bundled into one send per room: in a 50-player game, a
+ * burst of actions (everyone ticking a task, everyone tapping a number) would
+ * otherwise mean a full personalized copy to every phone for every action.
+ */
+const pendingBroadcasts = new Map<string, GameRoom>();
 function broadcastRoomUpdate(room: GameRoom) {
+  const code = room.state.code;
+  if (pendingBroadcasts.has(code)) return;
+  pendingBroadcasts.set(code, room);
+  setTimeout(() => {
+    pendingBroadcasts.delete(code);
+    sendRoomUpdateNow(room);
+  }, ROOM_UPDATE_BATCH_MS);
+}
+
+function sendRoomUpdateNow(room: GameRoom) {
   for (const id of room.state.playerOrder) {
     const p = room.state.players.get(id);
     if (p?.socketId) {

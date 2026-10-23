@@ -4,7 +4,6 @@
 import { io } from 'socket.io-client';
 
 const URL = process.env.URL ?? 'http://localhost:4000';
-const MAX = 15;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 let failures = 0;
 function check(cond, msg) {
@@ -16,12 +15,12 @@ function check(cond, msg) {
 }
 const ask = (s, event, payload) => new Promise((r) => s.emit(event, payload, r));
 
-/** Different numbers from 1 to MAX, `count` of them, adding up to `target`. */
-function combination(count, target) {
+/** Different numbers from 1 to `max`, `count` of them, adding up to `target`. */
+function combination(count, target, max) {
   const nums = Array.from({ length: count }, (_, i) => i + 1);
   let left = target - nums.reduce((a, b) => a + b, 0);
   for (let i = count - 1; i >= 0 && left > 0; i--) {
-    const room = MAX - (count - 1 - i) - nums[i];
+    const room = max - (count - 1 - i) - nums[i];
     const add = Math.min(room, left);
     nums[i] += add;
     left -= add;
@@ -59,13 +58,14 @@ async function main() {
   check(lock?.kind === 'numbers', 'impostor can pick the number lock');
   check(phones.every((p) => p.events.some(([t, e]) => t === 'triggered' && e.kind === 'numbers')), 'everyone is told it is a number lock');
   check(lock?.needed === 5, `all 5 living players have to pick (got ${lock?.needed})`);
-  check(!!combination(5, lock.target), `target ${lock.target} is reachable with 5 different numbers from 1 to ${MAX}`);
+  check(lock.maxNumber === 15, `a small game gets a 1 to 15 keypad (got ${lock.maxNumber})`);
+  check(!!combination(5, lock.target, lock.maxNumber), `target ${lock.target} is reachable with 5 different numbers from 1 to ${lock.maxNumber}`);
   check(lock.target > 15, 'target is more than the bare minimum, so it takes some thought');
   check(!('entries' in lock), 'nobody sees who picked which number');
 
   console.log('\n=== Wrong answers keep it locked ===');
-  const bad = await ask(crew[0].socket, 'submit_sabotage_number', { value: 16 });
-  check(bad.ok === false, 'numbers above 15 are refused');
+  const bad = await ask(crew[0].socket, 'submit_sabotage_number', { value: lock.maxNumber + 1 });
+  check(bad.ok === false, `numbers above ${lock.maxNumber} are refused`);
   for (const p of phones) await ask(p.socket, 'submit_sabotage_number', { value: 3 });
   await wait(200);
   check(phones[0].room.sabotagePuzzle?.kind === 'numbers', 'everyone picking 3 (double-ups) does not open it');
@@ -80,11 +80,11 @@ async function main() {
   await wait(900);
   const after = phones[0].room.sabotagePuzzle;
   check(after?.needed === 4, `only the 4 still alive need to pick now (got ${after?.needed})`);
-  check(!!combination(4, after.target), `target ${after.target} is still reachable with 4 picks`);
+  check(!!combination(4, after.target, after.maxNumber), `target ${after.target} is still reachable with 4 picks`);
 
   console.log('\n=== The right combination opens it ===');
   const alive = phones.filter((p) => p !== victim);
-  const answer = combination(4, after.target);
+  const answer = combination(4, after.target, after.maxNumber);
   for (const [i, p] of alive.entries()) await ask(p.socket, 'submit_sabotage_number', { value: answer[i] });
   await wait(300);
   check(phones[0].room.sabotagePuzzle === null, `picking ${answer.join(' + ')} = ${after.target} opens the lock`);

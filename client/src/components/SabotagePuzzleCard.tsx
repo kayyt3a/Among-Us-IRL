@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, LockKeyhole, Zap } from 'lucide-react';
-import { NUMBER_LOCK_MAX, type NumbersPuzzle, type SabotagePuzzle, type WordsPuzzle } from '@irl-impostor/shared';
+import { type NumbersPuzzle, type SabotagePuzzle, type WordsPuzzle } from '@irl-impostor/shared';
 import { useGame } from '../state/GameProvider';
 
 function Letters({ word, solved }: { word: string; solved?: boolean }) {
@@ -113,7 +113,7 @@ function NumberLock({ puzzle }: { puzzle: NumbersPuzzle }) {
         <div className="stack-xs" style={{ flex: 1 }}>
           <h3 className="h2">Sabotage: number lock</h3>
           <p className="muted small">
-            Everyone alive picks a different number from 1 to {NUMBER_LOCK_MAX}. Together they must add up to the target.
+            Everyone alive picks a different number from 1 to {puzzle.maxNumber}. Together they must add up to the target.
             The clock drains 1.5x faster until you do.
           </p>
         </div>
@@ -151,7 +151,7 @@ function NumberLock({ puzzle }: { puzzle: NumbersPuzzle }) {
         <div className="stack-sm">
           <span className="label">{mine ? `Your number: ${mine}. Tap another to change it.` : 'Pick your number'}</span>
           <div className="lock-pad" role="group" aria-label="Pick your number">
-            {Array.from({ length: NUMBER_LOCK_MAX }, (_, i) => i + 1).map((n) => (
+            {Array.from({ length: puzzle.maxNumber }, (_, i) => i + 1).map((n) => (
               <button
                 key={n}
                 className={`lock-key${mine === n ? ' selected' : ''}`}

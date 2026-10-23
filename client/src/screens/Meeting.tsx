@@ -20,6 +20,12 @@ export default function Meeting() {
   const roundPlayers = room.players.filter((p) => !p.isSpectator);
   const spectators = room.players.filter((p) => p.isSpectator);
   const alivePlayers = roundPlayers.filter((p) => p.status === 'alive');
+  // Big games (up to 50) get a two-column vote grid with the living first, so
+  // the list doesn't turn into a long scroll.
+  const compactVotes = roundPlayers.length > 12;
+  const voteOrder = compactVotes
+    ? [...alivePlayers, ...roundPlayers.filter((p) => p.status !== 'alive')]
+    : roundPlayers;
   const hasVoted = votedFor !== null || (!!me && meeting.votedPlayerIds.includes(me.id));
   const canOverrule = game.mySpecialRole === 'judge' && iAmAlive && !game.specialRoleUsed && meeting.phase === 'voting';
   const isReport = meeting.reason === 'report';
@@ -130,7 +136,8 @@ export default function Meeting() {
                 <div className="section-header">
                   <span className="label">{hasVoted ? 'Vote locked in' : 'Who is the impostor?'}</span>
                 </div>
-                {roundPlayers.map((p) => {
+                <div className={`vote-list${compactVotes ? ' compact' : ''}`}>
+                {voteOrder.map((p) => {
                   const dead = p.status !== 'alive';
                   const voted = meeting.votedPlayerIds.includes(p.id);
                   const selected = votedFor === p.id;
@@ -138,10 +145,10 @@ export default function Meeting() {
                     return (
                       <button key={p.id} className="choice" disabled>
                         <Avatar name={p.name} dead />
-                        {p.name}
-                        <span className="choice-trailing small">
+                        <span className="truncate">{p.name}</span>
+                        <span className="choice-trailing small" aria-label="Dead">
                           <Skull size={15} />
-                          Dead
+                          {!compactVotes && 'Dead'}
                         </span>
                       </button>
                     );
@@ -159,16 +166,20 @@ export default function Meeting() {
                         {p.id === me?.id && <span className="faint"> (you)</span>}
                       </span>
                       <span className="choice-trailing">
-                        {voted && (
-                          <span className="pill pill-green">
-                            <Check size={12} strokeWidth={3} />
-                            Voted
-                          </span>
-                        )}
+                        {voted &&
+                          (compactVotes ? (
+                            <Check size={16} strokeWidth={3} className="text-green" aria-label="Voted" />
+                          ) : (
+                            <span className="pill pill-green">
+                              <Check size={12} strokeWidth={3} />
+                              Voted
+                            </span>
+                          ))}
                       </span>
                     </button>
                   );
                 })}
+                </div>
                 <button
                   className={`choice${votedFor === 'skip' ? ' selected' : ''}${hasVoted && votedFor !== 'skip' ? ' dimmed' : ''}`}
                   aria-pressed={votedFor === 'skip'}

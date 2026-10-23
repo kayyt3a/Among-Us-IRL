@@ -1,13 +1,24 @@
 import { NUMBER_LOCK_MAX } from './types';
 
 /**
+ * The keypad size for a lock with `players` people: 1 to 15 in small games,
+ * growing with the player count (always 5 spare numbers) up to
+ * NUMBER_LOCK_MAX, so there are always enough different numbers to go round
+ * without a huge keypad in a small game.
+ */
+export function numberLockMaxFor(players: number): number {
+  return Math.min(NUMBER_LOCK_MAX, Math.max(15, players + 5));
+}
+
+/**
  * The smallest and largest totals `players` people can make by each entering
- * a different number from 1 to NUMBER_LOCK_MAX.
+ * a different number from 1 to numberLockMaxFor(players).
  */
 export function numberLockRange(players: number): { min: number; max: number } {
-  const n = Math.max(1, Math.min(players, NUMBER_LOCK_MAX));
+  const top = numberLockMaxFor(players);
+  const n = Math.max(1, Math.min(players, top));
   const min = (n * (n + 1)) / 2;
-  const max = n * NUMBER_LOCK_MAX - (n * (n - 1)) / 2;
+  const max = n * top - (n * (n - 1)) / 2;
   return { min, max };
 }
 

@@ -80,7 +80,7 @@ export default function HowToPlay({ onClose }: { onClose: () => void }) {
             <li>
               <strong>Sabotage:</strong> the game clock runs faster until the crew fixes it. Pick a{' '}
               <strong>scramble</strong> (two scrambled words anyone can solve) or a <strong>number lock</strong>{' '}
-              (everyone alive picks a different number from 1 to 15, and together they must hit a target).
+              (everyone alive picks a different number, and together they must hit a target).
             </li>
           </ul>
           <p>Eliminate and Vent are ready right away, then each needs 45 seconds to recharge.</p>

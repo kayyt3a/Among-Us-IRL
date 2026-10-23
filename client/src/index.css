@@ -2160,3 +2160,30 @@ img {
   padding-bottom: 14px;
   white-space: normal;
 }
+
+/* Vote list: one column normally, a tighter two-column grid for big games. */
+.vote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vote-list.compact {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vote-list.compact .choice {
+  min-height: 48px;
+  padding: 8px 10px;
+  gap: 8px;
+  font-size: 14.5px;
+  min-width: 0;
+}
+
+.vote-list.compact .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}

@@ -26,6 +26,7 @@
     "lint": "npm run lint --workspace=client",
     "test:features": "node scripts/features-test.mjs",
     "test:persistence": "node scripts/persistence-test.mjs",
-    "test:sabotage": "node scripts/sabotage-test.mjs"
+    "test:sabotage": "node scripts/sabotage-test.mjs",
+    "test:load": "node scripts/load-test.mjs"
   }
 }

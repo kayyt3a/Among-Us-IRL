@@ -18,7 +18,7 @@ import {
   pickTwoSabotageWords,
   pickNumberLockTarget,
   numberLockRange,
-  NUMBER_LOCK_MAX,
+  numberLockMaxFor,
   SabotageKind,
   SabotagePuzzle,
   PlayerRole,
@@ -625,7 +625,7 @@ export class GameRoom {
   }
 
   /**
-   * A player's number for the active number lock (1 to NUMBER_LOCK_MAX).
+   * A player's number for the active number lock (1 to numberLockMaxFor(players)).
    * They can change it until the lock opens.
    */
   submitSabotageNumber(playerId: string, value: number): { ok: true; solved: boolean } | { ok: false; error: string } {
@@ -634,8 +634,9 @@ export class GameRoom {
     if (!this.isInPlay(this.state.players.get(playerId))) {
       return { ok: false, error: 'Only living players can enter a number.' };
     }
-    if (!Number.isInteger(value) || value < 1 || value > NUMBER_LOCK_MAX) {
-      return { ok: false, error: `Pick a number from 1 to ${NUMBER_LOCK_MAX}.` };
+    const top = numberLockMaxFor(this.numberLockPlayers().length);
+    if (!Number.isInteger(value) || value < 1 || value > top) {
+      return { ok: false, error: `Pick a number from 1 to ${top}.` };
     }
     puzzle.entries[playerId] = value;
     this.touch();
@@ -1285,6 +1286,7 @@ export class GameRoom {
         .sort((a, b) => a - b),
       needed: players.length,
       myNumber: viewerId ? (puzzle.entries[viewerId] ?? null) : null,
+      maxNumber: numberLockMaxFor(players.length),
     };
   }
 

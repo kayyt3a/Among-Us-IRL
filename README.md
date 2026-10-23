@@ -82,7 +82,7 @@ play. No accounts, no app install, no QR codes or Bluetooth.
     between uses) and picks one of two each time. A **scramble** shows
     two scrambled words to the whole room; anyone can type guesses. A
     **number lock** shows a target: every living player taps a
-    different number from 1 to 15, and together they must add up to
+    different number (1 to 15, or more in bigger games), and together they must add up to
     exactly the target. Picks show without names, so a double-up is
     visible but not who made it (the impostor has to pick too, and can
     quietly cause trouble). The target is always reachable for the
@@ -344,6 +344,14 @@ breakdown in the result, and the hidden-role house rule.
 number lock: a reachable target, picks without names, double-ups and
 wrong totals keeping it locked, a kill mid-lock shrinking who has to
 pick, and the right combination opening it.
+
+`scripts/load-test.mjs` (`npm run test:load -- <games> <players>`,
+default 4 games of 50) runs whole games at once: everyone joins,
+does tasks, solves a number lock together, holds a meeting and votes.
+It reports how fast the server answers. Games are capped at 50
+players (`MAX_PLAYERS`); room updates are bundled into one send per
+room every 40ms, which is what keeps a burst of 50 people acting at
+once fast.
 
 `scripts/persistence-test.mjs` (`npm run test:persistence`) starts its
 own server with Redis, sets up a game in the middle of a meeting,

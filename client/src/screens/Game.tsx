@@ -513,7 +513,7 @@ export default function Game() {
                   'numbers',
                   LockKeyhole,
                   'Number lock',
-                  'Everyone alive must pick a different number from 1 to 15, adding up to a target. You can quietly mess it up.',
+                  'Everyone alive must pick a different number, and together they have to add up to a target. You can quietly mess it up.',
                 ],
               ] as const
             ).map(([kind, Icon, title, text]) => (

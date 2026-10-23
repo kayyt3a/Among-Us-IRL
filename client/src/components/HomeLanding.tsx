@@ -14,7 +14,7 @@ const FAQ = [
     'Do we need to download an app?',
     "No. Everyone just opens irlimposter.com on their phone. You can add it to your home screen if you like, but you don't have to.",
   ],
-  ['How many people can play?', 'Between 3 and 15. It is at its best with 6 or more and a few rooms to spread out in.'],
+  ['How many people can play?', 'Between 3 and 50. It is at its best with 6 to 15 and a few rooms to spread out in.'],
   ['Does it work on iPhone and Android?', 'Yes, in any up-to-date phone browser, like Safari or Chrome.'],
   [
     'Why does it want my microphone?',

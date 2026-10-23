@@ -58,6 +58,8 @@ jobs:
       - run: npm run test:abuse
       - run: npm run test:features
       - run: npm run test:sabotage
+      - name: Load test (4 games of 50 players at once)
+        run: npm run test:load -- 4 50
       - name: Restart mid-game (Redis)
         run: npm run test:persistence
         env:

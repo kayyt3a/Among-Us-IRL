@@ -3,7 +3,9 @@ export const MIN_TASKS_PER_PLAYER = 3;
 export const MAX_TASKS_PER_PLAYER = 8;
 
 export const MIN_PLAYERS = 3;
-export const MAX_PLAYERS = 15;
+export const MAX_PLAYERS = 50;
+/** Room updates within this window are bundled into one send per room. Short enough that nobody notices. */
+export const ROOM_UPDATE_BATCH_MS = 40;
 
 
 // Vent and kill are both available the instant a round starts; each only
